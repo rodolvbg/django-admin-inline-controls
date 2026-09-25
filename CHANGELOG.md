@@ -9,4 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial project scaffolding.
+- `InlineControlsMixin` for `TabularInline` and `StackedInline`:
+  pagination (page links or infinite scroll), filters (generated from
+  lookups or a custom form) and multi-column sorting, with state namespaced
+  per inline in the URL.
+- In-place refresh of a single inline, re-initializing the admin's inline
+  and widget JS; unsaved-changes prompt.
+- Saving rows loaded across several pages.
+- System checks for every option.
+- `contrib.filters` (`[filters]` extra): django-filter `FilterSet` support.
+- `contrib.nested` (`[nested]` extra): django-nested-admin support.

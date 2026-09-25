@@ -1,0 +1,11 @@
+{% with controls=inline_admin_formset.formset.inline_controls %}
+  {% if controls %}
+    <div class="inline-controls" id="{{ controls.container_id }}" data-inline-controls="{{ controls.config_json }}">
+      {% include "django_admin_inline_controls/toolbar.html" %}
+      {% include inline_admin_formset.opts.inline_controls_inner_template %}
+      {% include "django_admin_inline_controls/pagination.html" %}
+    </div>
+  {% else %}
+    {% include inline_admin_formset.opts.inline_controls_inner_template %}
+  {% endif %}
+{% endwith %}

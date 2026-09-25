@@ -1,0 +1,119 @@
+.inline-controls-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px 24px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--hairline-color, #e8e8e8);
+    background: var(--darkened-bg, #f8f8f8);
+}
+
+.inline-controls-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px 12px;
+}
+
+.inline-controls-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.inline-controls-filter label {
+    float: none;
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    font-size: 0.75rem;
+    font-weight: normal;
+    color: var(--body-quiet-color, #666);
+}
+
+.inline-controls-filter .errorlist {
+    margin: 0;
+}
+
+.inline-controls-filter-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+.inline-controls-ordering {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    font-size: 0.8125rem;
+}
+
+.inline-controls-ordering[hidden] {
+    display: none;
+}
+
+.inline-controls-ordering-label,
+.inline-controls-sort-priority,
+.inline-controls-sort-remove,
+.inline-controls-count {
+    color: var(--body-quiet-color, #666);
+}
+
+.inline-controls-sort-priority {
+    font-size: 0.6875rem;
+}
+
+.inline-controls-sort-remove {
+    margin-left: 2px;
+    text-decoration: none;
+}
+
+.inline-controls-ascending .inline-controls-sort-toggle::after {
+    content: " \25B2";
+    font-size: 0.7em;
+}
+
+.inline-controls-descending .inline-controls-sort-toggle::after {
+    content: " \25BC";
+    font-size: 0.7em;
+}
+
+th.inline-controls-sortable .inline-controls-sort-toggle {
+    color: inherit;
+}
+
+.inline-controls-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px;
+    font-size: 0.8125rem;
+}
+
+.inline-controls-page,
+.inline-controls-ellipsis {
+    min-width: 1.5em;
+    padding: 2px 6px;
+    text-align: center;
+}
+
+.inline-controls-current {
+    font-weight: bold;
+    border-radius: 4px;
+    background: var(--selected-bg, #e4e4e4);
+}
+
+.inline-controls-pagination .inline-controls-count {
+    margin-left: auto;
+}
+
+.inline-controls-infinite {
+    justify-content: center;
+    gap: 12px;
+}
+
+.inline-controls.inline-controls-loading {
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}

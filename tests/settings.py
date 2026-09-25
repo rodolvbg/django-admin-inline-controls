@@ -1,3 +1,5 @@
+import importlib.util
+
 SECRET_KEY = "test-secret-key"
 
 INSTALLED_APPS = [
@@ -10,6 +12,8 @@ INSTALLED_APPS = [
     "django_admin_inline_controls",
     "demo",
 ]
+if importlib.util.find_spec("nested_admin"):
+    INSTALLED_APPS.append("nested_admin")
 
 MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",

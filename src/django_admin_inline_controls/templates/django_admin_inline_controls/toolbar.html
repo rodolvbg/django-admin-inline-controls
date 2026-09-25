@@ -1,0 +1,36 @@
+{% load i18n %}
+{% if controls.filter_form or controls.ordering_columns %}
+  <div class="inline-controls-toolbar">
+    {% if controls.filter_form %}
+      <div class="inline-controls-filters" role="search">
+        {% for field in controls.filter_form %}
+          <div class="inline-controls-filter{% if field.errors %} errors{% endif %}">
+            {{ field.label_tag }}
+            {{ field }}
+            {{ field.errors }}
+          </div>
+        {% endfor %}
+        <div class="inline-controls-filter-buttons">
+          <button type="button" class="button" data-inline-controls-apply>{% translate "Filter" %}</button>
+          {% if controls.is_filtered %}
+            <button type="button" class="button" data-inline-controls-clear>{% translate "Clear" %}</button>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+    {% if controls.ordering_columns %}
+      <div class="inline-controls-ordering">
+        <span class="inline-controls-ordering-label">{% translate "Sort by:" %}</span>
+        {% for column in controls.ordering_columns %}
+          <span class="inline-controls-sort{% if column.direction %} inline-controls-{{ column.direction }}{% endif %}">
+            <a href="{{ column.toggle_url }}" class="inline-controls-sort-toggle" data-inline-controls-nav title="{% translate 'Toggle sorting' %}">{{ column.label }}</a>
+            {% if column.priority %}
+              <span class="inline-controls-sort-priority">{{ column.priority }}</span>
+              <a href="{{ column.remove_url }}" class="inline-controls-sort-remove" data-inline-controls-nav title="{% translate 'Remove from sorting' %}">&times;</a>
+            {% endif %}
+          </span>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
