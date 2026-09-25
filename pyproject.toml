@@ -46,6 +46,8 @@ optional-dependencies.dev = [
   "tox>=4",
   "tox-uv>=1",
 ]
+optional-dependencies.filters = [ "django-filter>=23.2" ]
+optional-dependencies.nested = [ "django-nested-admin>=4.1" ]
 urls.Homepage = "https://github.com/rodolvbg/django-admin-inline-controls"
 urls.Issues = "https://github.com/rodolvbg/django-admin-inline-controls/issues"
 urls.Repository = "https://github.com/rodolvbg/django-admin-inline-controls"
@@ -53,6 +55,8 @@ urls.Repository = "https://github.com/rodolvbg/django-admin-inline-controls"
 [dependency-groups]
 dev = [
   "coverage[toml]>=7.4",
+  "django-filter>=23.2",
+  "django-nested-admin>=4.1",
   "django-stubs[compatible-mypy]>=5",
   "mypy>=1.10",
   "pre-commit>=4",
@@ -80,6 +84,7 @@ python_version = "3.10"
 warn_redundant_casts = true
 warn_unused_ignores = true
 plugins = [ "mypy_django_plugin.main" ]
+overrides = [ { module = [ "django_filters.*", "nested_admin.*" ], ignore_missing_imports = true } ]
 
 [tool.django-stubs]
 django_settings_module = "example.settings"
@@ -99,10 +104,12 @@ report.skip_covered = true
 [tool.tox]
 env_list = [
   "py314-dj52",
+  "py314-dj52-extras",
   "py313-dj51",
   "py312-dj42",
   "py312-dj50",
   "py310-dj42",
+  "py310-dj42-extras",
   "py310-dj50",
   "py310-dj51",
   "py310-dj52",
@@ -116,6 +123,7 @@ env_run_base.deps = [
   { replace = "if", condition = "factor.dj50", then = [ "django>=5.0,<5.1" ], extend = true },
   { replace = "if", condition = "factor.dj51", then = [ "django>=5.1,<5.2" ], extend = true },
   { replace = "if", condition = "factor.dj52", then = [ "django>=5.2,<5.3" ], extend = true },
+  { replace = "if", condition = "factor.extras", then = [ "django-filter>=23.2", "django-nested-admin>=4.1" ], extend = true },
 ]
 env_run_base.package = "wheel"
 env_run_base.wheel_build_env = ".pkg"

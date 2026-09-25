@@ -24,3 +24,13 @@ INSTALLED_APPS = [
     "django_admin_inline_controls",
 ]
 ```
+
+### Optional extras
+
+The core only depends on Django. Integrations with third-party packages are
+opt-in:
+
+```bash
+pip install django-admin-inline-controls[filters]   # django-filter FilterSet support
+pip install django-admin-inline-controls[nested]    # django-nested-admin support
+```

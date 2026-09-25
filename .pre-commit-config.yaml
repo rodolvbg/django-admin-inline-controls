@@ -46,6 +46,8 @@ repos:
     - mypy>=1.10
     - django-stubs[compatible-mypy]>=5
     - django>=4.2
+    - django-filter>=23.2
+    - django-nested-admin>=4.1
     - pytest-django>=4.8
     types: [python]
     files: ^(src|example)/
