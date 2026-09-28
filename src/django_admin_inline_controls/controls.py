@@ -191,7 +191,9 @@ class InlineControls:
         )
         order_by.extend(default)
         # Pagination needs a total order or rows can repeat across pages.
-        if not any(value in ("pk", "-pk") for value in order_by):
+        pk_name = queryset.model._meta.pk.name
+        pk_values = {"pk", "-pk", pk_name, f"-{pk_name}"}
+        if not any(value in pk_values for value in order_by):
             order_by.append("pk")
         return order_by
 

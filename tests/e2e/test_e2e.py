@@ -27,6 +27,11 @@ def change_page(live_server, page: Page, admin_user, author):
     # Survives in-place updates, lost on a full page load.
     page.evaluate("window.__noReload = true")
     yield page
+    # Close the browser before the database is flushed: a request still in
+    # flight would otherwise hit the shared in-memory SQLite connection
+    # mid-flush and break this or the next test.
+    page.wait_for_load_state("networkidle")
+    page.close()
     assert errors == []
 
 
@@ -162,6 +167,7 @@ def test_stacked_inline_sort_links(change_page: Page):
         ".forEach(d => d.open = true)"
     )
     page.click("#books-2-group .inline-controls-sort-toggle >> text=Pages")
+    expect(page.locator("#books-2-group .inline-controls-ascending")).to_be_visible()
     page.click("#books-2-group .inline-controls-sort-toggle >> text=Pages")
 
     expect(page.locator("#books-2-group .inline-controls-descending")).to_be_visible()

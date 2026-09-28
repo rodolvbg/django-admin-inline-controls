@@ -1,4 +1,7 @@
 import importlib.util
+import os
+import tempfile
+from pathlib import Path
 
 SECRET_KEY = "test-secret-key"
 
@@ -36,10 +39,21 @@ TEMPLATES = [
     },
 ]
 
+# A file, not ":memory:": an in-memory test database is one connection shared
+# by every live_server thread, so two concurrent browser requests in the e2e
+# tests (e.g. an infinite-scroll fetch racing a form submit) corrupt each
+# other's transactions. With a file each thread gets its own connection.
+# One file per process, so parallel runs (tox run-parallel) don't collide.
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": ":memory:",
+        "TEST": {
+            "NAME": str(
+                Path(tempfile.gettempdir())
+                / f"django-admin-inline-controls-{os.getpid()}.sqlite3"
+            )
+        },
     }
 }
 

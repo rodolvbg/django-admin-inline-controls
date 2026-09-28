@@ -228,6 +228,10 @@
     /** Replace one inline with its state at `url` (or reload if unsupported). */
     async function navigate(root, url) {
         const state = states.get(root);
+        // A click while this inline is loading would act on stale links.
+        if (state.loading) {
+            return;
+        }
         if (state.dirty && !window.confirm(state.config.messages.unsaved)) {
             return;
         }
@@ -236,6 +240,7 @@
             window.location.assign(target);
             return;
         }
+        state.loading = true;
         root.classList.add("inline-controls-loading");
         try {
             const doc = await fetchDocument(target);

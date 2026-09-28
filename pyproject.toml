@@ -121,7 +121,7 @@ env_list = [
   "py310-dj51",
   "py310-dj52",
 ]
-env_run_base.commands = [ [ "pytest", "tests", "--ignore=tests/e2e", "{posargs}" ] ]
+env_run_base.commands = [ [ "pytest", "tests", "--ignore=tests/e2e", "--no-cov", "{posargs}" ] ]
 env_run_base.deps = [
   "pytest",
   "pytest-django",
