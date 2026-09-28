@@ -35,9 +35,36 @@
     margin: 0;
 }
 
+/* The admin styles text inputs and selects but not date/number inputs or
+   <button>: give every single-line control and the buttons one height. */
+.inline-controls-filter input:not([type="checkbox"], [type="radio"]),
+.inline-controls-filter select:not([multiple]),
+.inline-controls-filter-buttons .button {
+    box-sizing: border-box;
+    height: 30px;
+    margin: 0;
+    font-size: 0.8125rem;
+    vertical-align: middle;
+}
+
+.inline-controls-filter input:not([type="checkbox"], [type="radio"]) {
+    padding: 5px 6px;
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+    color: var(--body-fg, #333);
+    background-color: var(--body-bg, #fff);
+}
+
 .inline-controls-filter-buttons {
     display: flex;
     gap: 6px;
+}
+
+.inline-controls-filter-buttons .button {
+    padding: 0 12px;
+    border-radius: 4px;
+    line-height: 1;
+    cursor: pointer;
 }
 
 .inline-controls-ordering {

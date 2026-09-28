@@ -39,21 +39,19 @@ TEMPLATES = [
     },
 ]
 
-# A file, not ":memory:": an in-memory test database is one connection shared
-# by every live_server thread, so two concurrent browser requests in the e2e
-# tests (e.g. an infinite-scroll fetch racing a form submit) corrupt each
-# other's transactions. With a file each thread gets its own connection.
-# One file per process, so parallel runs (tox run-parallel) don't collide.
+# Files, not ":memory:". pytest-django's live_server shares one connection
+# across all its threads when the database *looks* in-memory (it checks NAME
+# before the test database exists), so two concurrent browser requests in
+# the e2e tests (an infinite-scroll fetch racing a form submit) would use one
+# SQLite connection at once: broken transactions or a segfault. With files,
+# each thread gets its own connection. One pair per process, so parallel
+# runs (tox run-parallel) don't collide.
+_DB_BASE = Path(tempfile.gettempdir()) / f"django-admin-inline-controls-{os.getpid()}"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
-        "TEST": {
-            "NAME": str(
-                Path(tempfile.gettempdir())
-                / f"django-admin-inline-controls-{os.getpid()}.sqlite3"
-            )
-        },
+        "NAME": f"{_DB_BASE}.sqlite3",
+        "TEST": {"NAME": f"{_DB_BASE}-test.sqlite3"},
     }
 }
 
