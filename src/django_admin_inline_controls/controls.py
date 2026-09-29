@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 
 PAGES = "pages"
 INFINITE = "infinite"
+FOOTER_FILTERED = "filtered"
+FOOTER_PAGE = "page"
 
 #: Where the JS finds things in the admin's inline markup. Override per inline
 #: with ``inline_controls_selectors`` for themes or inline templates with a
@@ -77,6 +79,21 @@ class OrderingColumn:
             "toggleUrl": self.toggle_url,
             "removeUrl": self.remove_url,
         }
+
+
+@dataclass(frozen=True)
+class FooterCell:
+    column: str
+    column_label: str
+    value: str
+
+
+@dataclass(frozen=True)
+class FooterRow:
+    """A row of totals/averages/… below the inline's table."""
+
+    label: str
+    cells: list[FooterCell]
 
 
 @dataclass(frozen=True)
@@ -199,6 +216,11 @@ class InlineControls:
             self.paginator = Paginator(queryset, self.per_page)
             self.page = self.paginator.get_page(self.params.get(self.page_param))
 
+        #: The rows the formset shows: what "page" footer rows add up.
+        self.shown_queryset = self._shown(queryset, bound_pks)
+        return self.shown_queryset
+
+    def _shown(self, queryset: QuerySet, bound_pks: list[Any] | None) -> QuerySet:
         if bound_pks is not None:
             if self.mode == INFINITE:
                 self.loaded_count = len(bound_pks)
@@ -396,7 +418,53 @@ class InlineControls:
 
     @property
     def has_footer(self) -> bool:
-        return self.paginator is not None or self.save_url is not None
+        return (
+            self.paginator is not None
+            or self.save_url is not None
+            or bool(self.footer_rows)
+        )
+
+    # Footer rows -----------------------------------------------------------
+
+    @cached_property
+    def footer_rows(self) -> list[FooterRow]:
+        """``inline_footer_rows`` computed on the filtered (or shown) rows,
+        with every aggregate of every row in a single query."""
+        definitions = self.inline.get_inline_footer_rows(self.request, self.parent)
+        if not definitions or not hasattr(self, "filtered_queryset"):
+            return []
+        queryset = (
+            self.shown_queryset
+            if self.inline.inline_footer_scope == FOOTER_PAGE
+            else self.filtered_queryset
+        )
+        aggregates = {
+            f"footer_{row}_{column}": value
+            for row, (_, cells) in enumerate(definitions)
+            for column, value in cells.items()
+            if getattr(value, "contains_aggregate", False)
+        }
+        results = queryset.order_by().aggregate(**aggregates) if aggregates else {}
+        rows = []
+        for row, (label, cells) in enumerate(definitions):
+            values = []
+            for column, value in cells.items():
+                key = f"footer_{row}_{column}"
+                if key in results:
+                    value = results[key]
+                elif callable(value):
+                    value = value(queryset)
+                values.append(
+                    FooterCell(
+                        column=column,
+                        column_label=self._column_label(column),
+                        value=str(
+                            self.inline.format_inline_footer_value(column, value)
+                        ),
+                    )
+                )
+            rows.append(FooterRow(label=str(label), cells=values))
+        return rows
 
     # URLs and config -------------------------------------------------------
 

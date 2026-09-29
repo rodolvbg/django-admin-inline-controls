@@ -5,10 +5,17 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
+from django.contrib.admin.utils import label_for_field
 from django.core import checks
 from django.core.exceptions import FieldDoesNotExist
 
-from django_admin_inline_controls.controls import DEFAULT_SELECTORS, INFINITE, PAGES
+from django_admin_inline_controls.controls import (
+    DEFAULT_SELECTORS,
+    FOOTER_FILTERED,
+    FOOTER_PAGE,
+    INFINITE,
+    PAGES,
+)
 
 if TYPE_CHECKING:
     from django_admin_inline_controls.mixins import InlineControlsMixin
@@ -82,6 +89,52 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
                     "names must be strings without a leading '-' or commas.",
                     "admin_inline_controls.E007",
                 )
+
+    footer_rows: Any = inline.inline_footer_rows
+    if isinstance(footer_rows, str) or not isinstance(footer_rows, list | tuple):
+        error(
+            f"The value of '{name}.inline_footer_rows' must be a list of "
+            "(label, {column: value}) pairs.",
+            "admin_inline_controls.E013",
+        )
+    else:
+        for index, row in enumerate(footer_rows):
+            if not (
+                isinstance(row, list | tuple)
+                and len(row) == 2
+                and isinstance(row[1], Mapping)
+            ):
+                error(
+                    f"'{name}.inline_footer_rows[{index}]' must be a "
+                    "(label, {column: value}) pair.",
+                    "admin_inline_controls.E013",
+                )
+                continue
+            for column in row[1]:
+                try:
+                    label_for_field(column, inline.model, inline)  # type: ignore[call-overload]
+                except AttributeError:
+                    error(
+                        f"'{name}.inline_footer_rows[{index}]' refers to "
+                        f"'{column}', which is not a field of "
+                        f"'{inline.model._meta.label}' or of the inline.",
+                        "admin_inline_controls.E014",
+                    )
+
+    if inline.inline_footer_scope not in (FOOTER_FILTERED, FOOTER_PAGE):
+        error(
+            f"The value of '{name}.inline_footer_scope' must be "
+            f"'{FOOTER_FILTERED}' or '{FOOTER_PAGE}'.",
+            "admin_inline_controls.E015",
+        )
+    elif inline.inline_footer_scope == FOOTER_PAGE and (
+        inline.inline_pagination == INFINITE
+    ):
+        error(
+            f"'{name}.inline_footer_scope = \"{FOOTER_PAGE}\"' can't be used with "
+            "infinite scroll (the shown rows change as more are loaded).",
+            "admin_inline_controls.E016",
+        )
 
     selectors: Any = inline.inline_controls_selectors
     if not isinstance(selectors, Mapping):

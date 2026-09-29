@@ -233,3 +233,51 @@ th.inline-controls-sortable .inline-controls-sort-toggle {
     opacity: 0.6;
     transition: opacity 0.2s;
 }
+
+.inline-controls-footer-rows {
+    display: flex;
+    flex-direction: column;
+    flex-basis: 100%;
+    gap: 2px;
+}
+
+.inline-controls-footer-rows[hidden] {
+    display: none;
+}
+
+.inline-controls-footer-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+}
+
+.inline-controls-footer-label {
+    font-weight: bold;
+}
+
+.inline-controls-footer-column {
+    color: var(--body-quiet-color, #666);
+}
+
+/* Specific enough to beat the admin's own `tfoot td` and inline rules. */
+.inline-group table tfoot.inline-controls-tfoot th,
+.inline-group table tfoot.inline-controls-tfoot td {
+    border-top: 1px solid var(--hairline-color, #e8e8e8);
+    background: var(--darkened-bg, #f8f8f8);
+    font-size: 0.8125rem;
+    font-weight: normal;
+    text-transform: none;
+}
+
+.inline-group table tfoot.inline-controls-tfoot th {
+    text-align: right;
+}
+
+.inline-group table tfoot.inline-controls-tfoot .inline-controls-footer-label {
+    color: var(--body-quiet-color, #666);
+    font-weight: bold;
+}
+
+.inline-group table tfoot.inline-controls-tfoot .inline-controls-footer-value {
+    font-weight: bold;
+}

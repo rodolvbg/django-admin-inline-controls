@@ -25,6 +25,7 @@ without leaving the change form.
   submitting (or reloading) the rest of the page.
 - **Actions** on the selected rows, like the changelist's: checkboxes,
   "select all", an action menu and a built-in `delete_selected`.
+- **Footer rows** for totals, averages…: `Sum("pages")` below its column.
 - Only depends on Django. No jQuery plugins, no htmx; works with
   `TabularInline` and `StackedInline`.
 
@@ -88,6 +89,8 @@ shareable and several inlines never clash.
 | `inline_controls_ajax` | `True` | Refresh the inline in place instead of reloading the page. |
 | `inline_save_button` | `False` | Show a button that saves only this inline. See [Saving only the inline](#saving-only-the-inline). |
 | `inline_actions` | `()` | Actions for the selected rows. See [Inline actions](#inline-actions). |
+| `inline_footer_rows` | `()` | Rows of totals, averages… below the table. See [Footer rows](#footer-rows). |
+| `inline_footer_scope` | `"filtered"` | What the footer rows add up: `"filtered"` or `"page"`. |
 
 Only columns declared in `inline_ordering_fields` can be sorted: ordering
 by an arbitrary field from the URL would let anyone infer the values of
@@ -300,6 +303,48 @@ parent `ModelAdmin` (`admin_inline_controls.E010`), and the user needs view
 or change permission on the parent object. Not available on nested_admin
 inlines (`admin_inline_controls.E103`).
 
+### Footer rows
+
+Totals, averages or any other summary below the inline's columns:
+
+```python
+from django.db.models import Avg, Count, Sum
+
+
+class BookInline(InlineControlsMixin, admin.TabularInline):
+    model = Book
+    inline_per_page = 20
+    inline_footer_rows = [
+        ("Total", {"title": Count("pk"), "pages": Sum("pages")}),
+        ("Average", {"pages": Avg("pages")}),
+    ]
+```
+
+![Total and Average rows below the Pages column](docs/screenshots/footer-rows.png)
+
+- Each row is a label and `{column: value}`. A value is an **aggregate**
+  (`Sum`, `Avg`, `Count`, `Max`…, `filter=` included), a
+  **`callable(queryset)`** for anything else, or a constant. All the
+  aggregates of all the rows run in **one query**.
+- **What is added up** — `inline_footer_scope`:
+  - `"filtered"` (default): every row matching the current filters, on
+    every page. With infinite scroll it doesn't depend on what is loaded.
+  - `"page"`: the rows shown (not available with infinite scroll,
+    `admin_inline_controls.E016`).
+- Values come from the **database**: unsaved edits aren't counted. The
+  rows follow filtering, sorting, paging, saving the inline and actions,
+  since they arrive with the refreshed inline.
+- **Formatting:** numbers are localized (`1.234,5` in Spanish), floats and
+  decimals rounded to 2 decimals at most. Override
+  `format_inline_footer_value(column, value)` for currencies, units…
+  (return safe HTML for markup), or `get_inline_footer_rows(request, obj)`
+  for dynamic rows.
+- **Where they go:** on tabular inlines, a `<tfoot>` whose cells line up
+  with the column headers (found with the `column_header` selector); the
+  label spans the columns before the first value. On stacked inlines —
+  or when a column isn't a header — they stay as a summary line in the
+  footer ("Total: Pages 3250").
+
 ## Optional extras
 
 The core only depends on Django. Integrations with third-party packages are
@@ -427,6 +472,7 @@ you replace a block's markup (`{{ block.super }}` keeps the original).
 | `footer` | The whole footer. |
 | `footer_classes` | Extra classes (empty). |
 | `footer_start`, `footer_end` | Empty slots at both ends. |
+| `footer_rows`, `footer_row`, `footer_cell` | The footer rows' summary (`footer_row` once per row, with `row`; `footer_cell` once per value, with `cell`). Tabular inlines turn it into a `<tfoot>`. |
 | `pagination` | Page links or the infinite-scroll status. |
 | `page_links`, `page_link` | The page links (`page_link` once per link, with `link`). |
 | `result_count` | "25 results". |
@@ -513,6 +559,10 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E010` | `inline_actions` is set but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
 | `admin_inline_controls.E011` | `inline_controls_selectors` is not a dict. |
 | `admin_inline_controls.E012` | An `inline_controls_selectors` key is unknown, or its value is not a selector or a non-empty list of selectors. |
+| `admin_inline_controls.E013` | `inline_footer_rows` is not a list of `(label, {column: value})` pairs. |
+| `admin_inline_controls.E014` | An `inline_footer_rows` column is not a field of the model or of the inline. |
+| `admin_inline_controls.E015` | `inline_footer_scope` is not `"filtered"` or `"page"`. |
+| `admin_inline_controls.E016` | `inline_footer_scope = "page"` with infinite scroll. |
 | `admin_inline_controls.E101` | `inline_pagination = "infinite"` on a nested_admin inline. |
 | `admin_inline_controls.E102` | `inline_save_button = True` on a nested_admin inline. |
 | `admin_inline_controls.E103` | `inline_actions` on a nested_admin inline. |

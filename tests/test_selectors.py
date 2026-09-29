@@ -1,10 +1,10 @@
 import json
 
 import pytest
+from demo.models import Author, Book
 from django.contrib import admin
 from django.urls import reverse
 
-from demo.models import Author, Book
 from django_admin_inline_controls.controls import DEFAULT_SELECTORS
 from django_admin_inline_controls.mixins import InlineControlsMixin
 

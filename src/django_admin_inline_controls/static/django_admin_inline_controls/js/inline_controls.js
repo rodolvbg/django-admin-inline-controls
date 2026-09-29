@@ -202,6 +202,81 @@
         return all;
     }
 
+    /**
+     * Tabular inlines: turn the footer rows (rendered as a summary in the
+     * footer) into a <tfoot> whose cells line up with the column headers.
+     * Returns true when it did, so the summary can be hidden.
+     */
+    function renderFooterRows(root, config) {
+        const summary = root.querySelector(
+            "[data-inline-controls-footer-rows]",
+        );
+        const thead = query(root, config, "table_head");
+        const header = thead?.rows[0];
+        if (!summary || !header) {
+            return false;
+        }
+        const width = [...header.cells].reduce(
+            (n, cell) => n + cell.colSpan,
+            0,
+        );
+        const tfoot = document.createElement("tfoot");
+        tfoot.className = "inline-controls-tfoot";
+        for (const row of summary.querySelectorAll(
+            ".inline-controls-footer-row",
+        )) {
+            const values = new Map();
+            for (const cell of row.querySelectorAll("[data-column]")) {
+                const th = query(thead, config, "column_header", {
+                    name: cell.dataset.column,
+                });
+                if (!th) {
+                    return false; // a column isn't shown as a header: keep the summary
+                }
+                values.set(
+                    th.cellIndex,
+                    cell.querySelector(".inline-controls-footer-value"),
+                );
+            }
+            const tr = document.createElement("tr");
+            const first = Math.min(...values.keys(), width);
+            // The label spans the empty columns before the first value; the
+            // leading "original" column alone is too narrow for it, so with
+            // no empty column the label goes into the first value's cell.
+            const labelText = document.createElement("span");
+            labelText.className = "inline-controls-footer-label";
+            labelText.textContent = row.dataset.label;
+            let index = 0;
+            if (first >= 2) {
+                const label = document.createElement("th");
+                label.scope = "row";
+                label.colSpan = first;
+                label.append(labelText);
+                tr.append(label);
+                index = first;
+            }
+            for (; index < width; index++) {
+                const td = document.createElement("td");
+                const value = values.get(index);
+                if (value) {
+                    td.className = "inline-controls-footer-value";
+                    td.innerHTML = value.innerHTML;
+                    if (index === first && first < 2) {
+                        td.prepend(labelText, " ");
+                    }
+                }
+                tr.append(td);
+            }
+            tfoot.append(tr);
+        }
+        thead
+            .closest("table")
+            ?.querySelector(":scope > tfoot.inline-controls-tfoot")
+            ?.remove();
+        thead.closest("table")?.append(tfoot);
+        return true;
+    }
+
     /** Re-run the admin's inline and widget setup on freshly inserted HTML. */
     function reinitAdmin(container, config = readConfig(container)) {
         const $ = window.django?.jQuery;
@@ -719,6 +794,10 @@
 
         placeControls(root, config);
         setupActions(root, state);
+        if (renderFooterRows(root, config)) {
+            root.querySelector("[data-inline-controls-footer-rows]").hidden =
+                true;
+        }
         if (decorateHeaders(root, config)) {
             const ordering = root.querySelector(".inline-controls-ordering");
             if (ordering) {
@@ -837,6 +916,7 @@
         placeControls,
         query,
         reindexForm,
+        renderFooterRows,
         runAction,
         saveInline,
         setup,

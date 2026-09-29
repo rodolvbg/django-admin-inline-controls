@@ -408,3 +408,35 @@ def test_selectors_adapt_to_another_markup(themed_page: Page, author):
     )
     expect(status).to_have_text("Deleted 1 book.")
     assert not Book.objects.filter(author=author, title=first_title).exists()
+
+
+def test_footer_rows_follow_the_filters(change_page: Page):
+    page = change_page
+    tfoot = page.locator("#books-group tfoot.inline-controls-tfoot")
+    expect(tfoot.locator("tr").first).to_contain_text("Total 25")
+    expect(tfoot.locator("tr").first).to_contain_text("3250")
+    expect(
+        page.locator("#books-inline-controls [data-inline-controls-footer-rows]")
+    ).to_be_hidden()
+
+    page.select_option("#id_books-f-status", "published")
+    page.click("#books-group [data-inline-controls-apply]")
+
+    # 13 published books (odd n), pages 10 * n.
+    expect(tfoot.locator("tr").first).to_contain_text("Total 13")
+    expect(tfoot.locator("tr").first).to_contain_text("1690")
+    assert_not_reloaded(page)
+
+
+def test_stacked_inline_shows_the_footer_summary(change_page: Page):
+    page = change_page
+    page.evaluate(
+        "document.querySelectorAll('#books-2-group details')"
+        ".forEach(d => d.open = true)"
+    )
+    summary = page.locator(
+        "#books-2-inline-controls [data-inline-controls-footer-rows]"
+    )
+
+    expect(summary).to_be_visible()
+    expect(summary).to_contain_text("3250")

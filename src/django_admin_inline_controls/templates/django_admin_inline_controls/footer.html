@@ -10,6 +10,28 @@
     <div class="inline-controls-footer{% if controls.mode == 'infinite' %} inline-controls-infinite{% endif %}{% block footer_classes %}{% endblock %}">
       {% block footer_start %}{% endblock %}
 
+      {% block footer_rows %}
+        {% if controls.footer_rows %}
+          <div class="inline-controls-footer-rows" data-inline-controls-footer-rows>
+            {% for row in controls.footer_rows %}
+              {% block footer_row %}
+                <div class="inline-controls-footer-row" data-label="{{ row.label }}">
+                  <span class="inline-controls-footer-label">{{ row.label }}:</span>
+                  {% for cell in row.cells %}
+                    {% block footer_cell %}
+                      <span class="inline-controls-footer-cell" data-column="{{ cell.column }}">
+                        <span class="inline-controls-footer-column">{{ cell.column_label }}</span>
+                        <span class="inline-controls-footer-value">{{ cell.value }}</span>
+                      </span>
+                    {% endblock footer_cell %}
+                  {% endfor %}
+                </div>
+              {% endblock footer_row %}
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endblock footer_rows %}
+
       {% block pagination %}
         {% if controls.paginator %}
           {% if controls.mode == "infinite" %}

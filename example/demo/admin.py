@@ -1,6 +1,7 @@
 import csv
 
 from django.contrib import admin, messages
+from django.db.models import Avg, Count, Sum
 from django.db.models.functions import Lower
 from django.http import HttpResponse
 
@@ -31,6 +32,10 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
     ]
     inline_save_button = True
     inline_actions = ["mark_published", "export_csv", "delete_selected"]
+    inline_footer_rows = [
+        ("Total", {"title": Count("pk"), "pages": Sum("pages")}),
+        ("Average", {"pages": Avg("pages")}),
+    ]
 
     @inline_action(
         permissions=["change"],
@@ -60,6 +65,7 @@ class ArticleInline(InlineControlsMixin, admin.TabularInline):
     inline_ordering_fields = ["title", "words"]
     inline_save_button = True
     inline_actions = ["delete_selected"]
+    inline_footer_rows = [("Total", {"words": Sum("words")})]
 
 
 class BookStackedInline(InlineControlsMixin, admin.StackedInline):
@@ -70,6 +76,7 @@ class BookStackedInline(InlineControlsMixin, admin.StackedInline):
     inline_per_page = 3
     inline_ordering_fields = ["title", "pages"]
     inline_filter_fields = ["status"]
+    inline_footer_rows = [("Total", {"pages": Sum("pages")})]
     classes = ["collapse"]
 
 

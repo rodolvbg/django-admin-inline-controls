@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Template blocks throughout the wrapper, toolbar, footer and response
   templates, and per-inline `inline_controls_toolbar_template` /
   `inline_controls_footer_template`, so they can be extended.
+- `inline_footer_rows` / `inline_footer_scope`: rows of totals, averages…
+  below the inline's columns (a `<tfoot>` on tabular inlines), aggregated
+  in one query over the filtered rows or the page.
 - `inline_controls_selectors`: where the JS looks in the inline's markup is
   configurable (`DEFAULT_SELECTORS`), for themes and custom inline
   templates; a cancelable `inline-controls:place` event to place the

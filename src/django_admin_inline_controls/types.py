@@ -23,11 +23,15 @@ Ordering: TypeAlias = list[tuple[str, bool]]
 FilterResult: TypeAlias = tuple[Form | None, QuerySet]
 #: ``inline_controls_selectors``: CSS selector(s) per key, tried in order.
 Selectors: TypeAlias = Mapping[str, str | Sequence[str]]
+#: ``inline_footer_rows``: ``(label, {column: value})`` pairs, a value being
+#: an aggregate (``Sum("pages")``), a ``callable(queryset)`` or a constant.
+FooterRows: TypeAlias = Sequence[tuple[Any, Mapping[str, Any]]]
 #: Actions available to a user, keyed by name.
 InlineActions: TypeAlias = "dict[str, InlineActionSpec]"
 
 __all__ = [
     "FilterResult",
+    "FooterRows",
     "InlineActions",
     "Ordering",
     "OrderingFields",

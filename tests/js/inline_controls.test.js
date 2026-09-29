@@ -450,3 +450,80 @@ describe("custom selectors", () => {
         expect(root.querySelector(".card .inline-controls-footer")).toBeNull();
     });
 });
+
+describe("renderFooterRows", () => {
+    const render = (summary) => {
+        document.body.innerHTML = `
+            <div class="inline-controls" id="books-inline-controls">
+              <div class="inline-group" id="books-group">
+                <table><thead><tr>
+                  <th class="original"></th>
+                  <th class="column-title">Title</th>
+                  <th class="column-status">Status</th>
+                  <th class="column-pages">Pages</th>
+                  <th>Delete?</th>
+                </tr></thead><tbody></tbody></table>
+              </div>
+              <div data-inline-controls-footer-rows>${summary}</div>
+            </div>`;
+        return document.getElementById("books-inline-controls");
+    };
+    const row = (label, cells) =>
+        `<div class="inline-controls-footer-row" data-label="${label}">${cells
+            .map(
+                ([column, value]) =>
+                    `<span data-column="${column}"><span class="inline-controls-footer-value">${value}</span></span>`,
+            )
+            .join("")}</div>`;
+    const texts = (tr) =>
+        [...tr.cells].map((cell) => [cell.colSpan, cell.textContent]);
+
+    it("aligns values with their column headers", () => {
+        const root = render(row("Average", [["pages", "490"]]));
+
+        expect(api.renderFooterRows(root, config())).toBe(true);
+        const [tr] = root.querySelectorAll("tfoot.inline-controls-tfoot tr");
+        // The label spans every column before the first value.
+        expect(texts(tr)).toEqual([
+            [3, "Average"],
+            [1, "490"],
+            [1, ""],
+        ]);
+    });
+
+    it("puts the label into the first value's cell when it's the first column", () => {
+        const root = render(
+            row("Total", [
+                ["title", "95"],
+                ["pages", "4655"],
+            ]),
+        );
+        api.renderFooterRows(root, config());
+        const [tr] = root.querySelectorAll("tfoot tr");
+
+        expect(texts(tr)).toEqual([
+            [1, ""],
+            [1, "Total 95"],
+            [1, ""],
+            [1, "4655"],
+            [1, ""],
+        ]);
+    });
+
+    it("keeps the summary when a column has no header", () => {
+        const root = render(row("Total", [["missing", "1"]]));
+
+        expect(api.renderFooterRows(root, config())).toBe(false);
+        expect(root.querySelector("tfoot")).toBeNull();
+    });
+
+    it("replaces a previous tfoot instead of adding another", () => {
+        const root = render(row("Total", [["pages", "1"]]));
+        api.renderFooterRows(root, config());
+        api.renderFooterRows(root, config());
+
+        expect(
+            root.querySelectorAll("tfoot.inline-controls-tfoot"),
+        ).toHaveLength(1);
+    });
+});
