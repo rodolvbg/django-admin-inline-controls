@@ -466,9 +466,16 @@ class InlineControlsMixin:
 
     @property
     def media(self) -> forms.Media:
+        # The save button's and the actions' scripts load only when used;
+        # always in this order, so several inlines' media merge cleanly.
+        js = ["django_admin_inline_controls/js/core.js"]
+        if self.inline_save_button:
+            js.append("django_admin_inline_controls/js/save.js")
+        if self.inline_actions:
+            js.append("django_admin_inline_controls/js/actions.js")
         return super().media + forms.Media(  # type: ignore[misc]
-            js=["django_admin_inline_controls/js/inline_controls.js"],
-            css={"all": ["django_admin_inline_controls/css/inline_controls.css"]},
+            js=js,
+            css={"all": ["django_admin_inline_controls/css/core.css"]},
         )
 
     def check(self, **kwargs: Any) -> list[Any]:

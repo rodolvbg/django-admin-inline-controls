@@ -3,13 +3,16 @@
  *
  * Progressive enhancement for inlines rendered by InlineControlsMixin:
  * filters, sortable headers and page links refresh only that inline
- * (fetch + swap) and infinite mode appends the next page on scroll.
+ * (fetch + swap) and infinite mode appends the next page on scroll. The
+ * save button and the actions are separate scripts (save.js, actions.js),
+ * loaded only by inlines that use them.
  * Plain script, no dependencies; uses django.jQuery only to re-run the
  * admin's own inline/widget initialization after a swap.
  */
 (() => {
     const ROOT_SELECTOR = "[data-inline-controls]";
     const states = new WeakMap();
+    const features = [];
     let historyPushed = false;
 
     const escapeRegExp = (value) =>
@@ -272,306 +275,12 @@
         return node;
     }
 
-    /** The admin form's values for the controls inside one inline group. */
-    function inlineFormData(group, form) {
-        const data = new FormData();
-        const csrf = form.querySelector("[name=csrfmiddlewaretoken]");
-        if (csrf) {
-            data.append(csrf.name, csrf.value);
-        }
-        const skipTypes = ["submit", "button", "reset", "image"];
-        for (const el of group.querySelectorAll("input, select, textarea")) {
-            if (
-                !el.name ||
-                el.disabled ||
-                el.form !== form ||
-                el.name.includes("__prefix__") ||
-                skipTypes.includes(el.type)
-            ) {
-                continue;
-            }
-            if (
-                (el.type === "checkbox" || el.type === "radio") &&
-                !el.checked
-            ) {
-                continue;
-            }
-            if (el.type === "file") {
-                for (const file of el.files) {
-                    data.append(el.name, file);
-                }
-            } else if (el.tagName === "SELECT" && el.multiple) {
-                for (const option of el.selectedOptions) {
-                    data.append(el.name, option.value);
-                }
-            } else {
-                data.append(el.name, el.value);
-            }
-        }
-        return data;
-    }
-
-    function showStatus(
-        root,
-        status,
-        message,
-        scope = ".inline-controls-save",
-    ) {
+    /** Show a result message in the status element under `scope`. */
+    function showStatus(root, status, message, scope) {
         const el = root.querySelector(`${scope} .inline-controls-status`);
         if (el) {
             el.className = `inline-controls-status inline-controls-status-${status}`;
             el.textContent = message;
-        }
-    }
-
-    /** POST only this inline's forms and swap in the re-rendered inline. */
-    async function saveInline(root) {
-        const state = states.get(root);
-        const { config } = state;
-        const group = document.getElementById(`${config.prefix}-group`);
-        const form = group?.closest("form");
-        if (state.loading || !config.saveUrl || !form) {
-            return;
-        }
-        state.loading = true;
-        root.classList.add("inline-controls-loading");
-        const target = new URL(
-            config.saveUrl + window.location.search,
-            window.location.href,
-        ).toString();
-        try {
-            const response = await fetch(target, {
-                method: "POST",
-                body: inlineFormData(group, form),
-                credentials: "same-origin",
-                headers: { "X-Requested-With": "XMLHttpRequest" },
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            const text = await response.text();
-            const doc = new DOMParser().parseFromString(text, "text/html");
-            const result = doc.getElementById(
-                `${config.prefix}-inline-controls-response`,
-            );
-            const fresh = doc.getElementById(root.id);
-            if (!result || !fresh) {
-                throw new Error("Inline not found in response");
-            }
-            const node = swapInline(root, fresh);
-            setup(node);
-            reinitAdmin(node);
-            showStatus(node, result.dataset.status, result.dataset.message);
-        } catch {
-            state.loading = false;
-            root.classList.remove("inline-controls-loading");
-            showStatus(root, "failed", config.messages.saveFailed);
-        }
-    }
-
-    const format = (template, values) =>
-        template.replace(/%\((\w+)\)s/g, (_, key) => values[key]);
-
-    /** Saved rows of the inline with their primary keys. */
-    function selectableRows(root, config) {
-        const group = root.querySelector(`[id="${config.prefix}-group"]`);
-        if (!group) {
-            return [];
-        }
-        return formRows(group, config.prefix)
-            .filter((row) => row.classList.contains("has_original"))
-            .map((row) => {
-                const index = row.id.slice(config.prefix.length + 1);
-                const input = row.querySelector(
-                    `[name="${config.prefix}-${index}-${config.pkName}"]`,
-                );
-                return { row, pk: input?.value };
-            })
-            .filter(({ pk }) => pk);
-    }
-
-    function addRowCheckbox(row, pk, config) {
-        if (row.querySelector(".inline-controls-select")) {
-            return;
-        }
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.className = "inline-controls-select";
-        checkbox.value = pk;
-        checkbox.setAttribute("form", config.actionsFormId);
-        checkbox.setAttribute("aria-label", config.messages.selectRow ?? "");
-        // Next to the object's name: the label line of a tabular row (inside
-        // the zero-width "original" cell) or the heading of a stacked one.
-        (query(row, config, "row_label") ?? row).prepend(checkbox);
-    }
-
-    function selectedPks(root) {
-        return [
-            ...root.querySelectorAll(".inline-controls-select:checked"),
-        ].map((checkbox) => checkbox.value);
-    }
-
-    function updateSelection(root, state) {
-        const { config } = state;
-        const boxes = [...root.querySelectorAll(".inline-controls-select")];
-        const checked = boxes.filter((box) => box.checked).length;
-        const total = config.totalCount ?? boxes.length;
-        const all = boxes.length > 0 && checked === boxes.length;
-        if (!all) {
-            state.selectAcross = false;
-        }
-        const toggle = root.querySelector(".inline-controls-select-all");
-        if (toggle) {
-            toggle.checked = all;
-            toggle.indeterminate = checked > 0 && !all;
-        }
-        const label = root.querySelector("[data-inline-controls-selection]");
-        if (label) {
-            label.textContent = state.selectAcross
-                ? format(config.messages.allSelected, { total })
-                : format(config.messages.selected, {
-                      sel: checked,
-                      cnt: total,
-                  });
-        }
-        const across = root.querySelector(
-            "[data-inline-controls-select-across]",
-        );
-        if (across) {
-            across.hidden = !all || state.selectAcross || total <= boxes.length;
-            across.textContent = format(config.messages.selectAll, { total });
-        }
-    }
-
-    function setupActions(root, state) {
-        const { config } = state;
-        if (!config.actionUrl) {
-            return;
-        }
-        for (const { row, pk } of selectableRows(root, config)) {
-            addRowCheckbox(row, pk, config);
-        }
-        const toggle = document.createElement("input");
-        toggle.type = "checkbox";
-        toggle.className = "inline-controls-select-all";
-        toggle.setAttribute("form", config.actionsFormId);
-        toggle.setAttribute("aria-label", config.messages.selectAllRows ?? "");
-        root.querySelector(".inline-controls-actions")?.prepend(toggle);
-        updateSelection(root, state);
-    }
-
-    async function runAction(root) {
-        const state = states.get(root);
-        const { config } = state;
-        const select = root.querySelector("[data-inline-controls-action]");
-        const group = document.getElementById(`${config.prefix}-group`);
-        const form = group?.closest("form");
-        if (state.loading || !config.actionUrl || !select || !form) {
-            return;
-        }
-        const scope = ".inline-controls-actions";
-        const action = config.actions.find(
-            (item) => item.name === select.value,
-        );
-        const pks = selectedPks(root);
-        if (!action) {
-            showStatus(root, "error", config.messages.noAction, scope);
-            return;
-        }
-        if (pks.length === 0 && !state.selectAcross) {
-            showStatus(root, "error", config.messages.noSelection, scope);
-            return;
-        }
-        const count = state.selectAcross
-            ? (config.totalCount ?? pks.length)
-            : pks.length;
-        if (
-            action.confirmation &&
-            !window.confirm(format(action.confirmation, { count }))
-        ) {
-            return;
-        }
-        if (state.dirty && !window.confirm(config.messages.unsaved)) {
-            return;
-        }
-        const data = new FormData();
-        const csrf = form.querySelector("[name=csrfmiddlewaretoken]");
-        if (csrf) {
-            data.append(csrf.name, csrf.value);
-        }
-        data.append("action", action.name);
-        for (const pk of pks) {
-            data.append("_selected_action", pk);
-        }
-        data.append("select_across", state.selectAcross ? "1" : "0");
-        data.append(
-            "_inline_controls_loaded",
-            String(selectableRows(root, config).length),
-        );
-        state.loading = true;
-        root.classList.add("inline-controls-loading");
-        const target = new URL(
-            config.actionUrl + window.location.search,
-            window.location.href,
-        ).toString();
-        try {
-            const response = await fetch(target, {
-                method: "POST",
-                body: data,
-                credentials: "same-origin",
-                headers: { "X-Requested-With": "XMLHttpRequest" },
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            const disposition =
-                response.headers.get("Content-Disposition") ?? "";
-            if (disposition.includes("attachment")) {
-                const blob = await response.blob();
-                const link = document.createElement("a");
-                link.href = URL.createObjectURL(blob);
-                link.download =
-                    disposition.match(/filename="?([^";]+)"?/)?.[1] ??
-                    "download";
-                document.body.append(link);
-                link.click();
-                link.remove();
-                URL.revokeObjectURL(link.href);
-                state.loading = false;
-                root.classList.remove("inline-controls-loading");
-                return;
-            }
-            if (response.redirected) {
-                window.location.assign(response.url);
-                return;
-            }
-            const text = await response.text();
-            const doc = new DOMParser().parseFromString(text, "text/html");
-            const result = doc.getElementById(
-                `${config.prefix}-inline-controls-response`,
-            );
-            const fresh = doc.getElementById(root.id);
-            if (!result || !fresh) {
-                // Any other page the action returned (e.g. an intermediate
-                // step) replaces this one.
-                document.open();
-                document.write(text);
-                document.close();
-                return;
-            }
-            const node = swapInline(root, fresh);
-            setup(node);
-            reinitAdmin(node);
-            showStatus(
-                node,
-                result.dataset.status,
-                result.dataset.message,
-                scope,
-            );
-        } catch {
-            state.loading = false;
-            root.classList.remove("inline-controls-loading");
-            showStatus(root, "failed", config.messages.actionFailed, scope);
         }
     }
 
@@ -686,11 +395,8 @@
                     more.remove();
                 }
             }
-            if (state.config.actionUrl) {
-                for (const { row, pk } of selectableRows(root, state.config)) {
-                    addRowCheckbox(row, pk, state.config);
-                }
-                updateSelection(root, state);
+            for (const feature of features) {
+                feature.rowsLoaded?.(root, state);
             }
             for (const node of inserted) {
                 initWidgets(node);
@@ -708,17 +414,13 @@
             return;
         }
         const config = readConfig(root);
-        const state = {
-            config,
-            dirty: false,
-            loading: false,
-            observer: null,
-            selectAcross: false,
-        };
+        const state = { config, dirty: false, loading: false, observer: null };
         states.set(root, state);
 
         placeControls(root, config);
-        setupActions(root, state);
+        for (const feature of features) {
+            feature.setup?.(root, state);
+        }
         if (decorateHeaders(root, config)) {
             const ordering = root.querySelector(".inline-controls-ordering");
             if (ordering) {
@@ -734,9 +436,7 @@
             if (nav) {
                 event.preventDefault();
                 navigate(root, nav.getAttribute("href"));
-                return;
-            }
-            if (event.target.closest("[data-inline-controls-apply]")) {
+            } else if (event.target.closest("[data-inline-controls-apply]")) {
                 event.preventDefault();
                 navigate(root, filterUrl(state.config, false));
             } else if (event.target.closest("[data-inline-controls-clear]")) {
@@ -745,23 +445,10 @@
             } else if (event.target.closest("[data-inline-controls-more]")) {
                 event.preventDefault();
                 loadMore(root);
-            } else if (event.target.closest("[data-inline-controls-save]")) {
-                event.preventDefault();
-                saveInline(root);
-            } else if (event.target.closest("[data-inline-controls-run]")) {
-                event.preventDefault();
-                runAction(root);
             } else if (
-                event.target.closest("[data-inline-controls-select-across]")
+                features.some((feature) => feature.click?.(event, root, state))
             ) {
                 event.preventDefault();
-                for (const box of root.querySelectorAll(
-                    ".inline-controls-select",
-                )) {
-                    box.checked = true;
-                }
-                state.selectAcross = true;
-                updateSelection(root, state);
             }
         });
         root.addEventListener("keydown", (event) => {
@@ -770,22 +457,12 @@
                 navigate(root, filterUrl(state.config, false));
             }
         });
-        const isActionWidget = (el) =>
-            el.getAttribute?.("form") === config.actionsFormId;
         const markDirty = (event) => {
+            // A feature's own widgets (e.g. the action checkboxes) are not
+            // edits of the inline.
             if (
-                event.target.classList?.contains("inline-controls-select-all")
+                features.some((feature) => feature.edit?.(event, root, state))
             ) {
-                for (const box of root.querySelectorAll(
-                    ".inline-controls-select",
-                )) {
-                    box.checked = event.target.checked;
-                }
-            }
-            if (isActionWidget(event.target)) {
-                if (event.type === "change") {
-                    updateSelection(root, state);
-                }
                 return;
             }
             if (!isFilterWidget(event.target)) {
@@ -803,6 +480,23 @@
                 }
             });
             state.observer.observe(more);
+        }
+    }
+
+    /**
+     * Add a feature (the save button, the actions…), loaded as its own
+     * script after this one. Its optional hooks get `(root, state)`:
+     * `setup` when an inline is set up, `rowsLoaded` after infinite mode
+     * appends rows, and `click` / `edit` also the event first, returning
+     * true when they handled it.
+     */
+    function register(feature) {
+        features.push(feature);
+        for (const root of document.querySelectorAll(ROOT_SELECTOR)) {
+            const state = states.get(root);
+            if (state) {
+                feature.setup?.(root, state);
+            }
         }
     }
 
@@ -831,15 +525,17 @@
         filterUrl,
         formRows,
         init,
-        inlineFormData,
         loadMore,
         navigate,
         placeControls,
         query,
+        register,
         reindexForm,
-        runAction,
-        saveInline,
+        reinitAdmin,
         setup,
+        showStatus,
+        stateOf: (root) => states.get(root),
+        swapInline,
         updateElementIndex,
     };
 })();

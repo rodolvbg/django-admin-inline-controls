@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Template blocks throughout the wrapper, toolbar, footer and response
   templates, and per-inline `inline_controls_toolbar_template` /
   `inline_controls_footer_template`, so they can be extended.
+- The JS is split per feature: the save button's and the actions' scripts
+  load only for inlines that use them.
 - `inline_footer_rows` / `inline_footer_scope`: rows of totals, averages…
   below the inline's columns (a `<tfoot>` on tabular inlines), aggregated
   in one query over the filtered rows or the page, rendered by the server

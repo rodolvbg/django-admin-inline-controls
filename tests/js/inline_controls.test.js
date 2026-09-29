@@ -3,9 +3,11 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 let api;
 
 beforeAll(async () => {
-    await import(
-        "../../src/django_admin_inline_controls/static/django_admin_inline_controls/js/inline_controls.js"
-    );
+    const js =
+        "../../src/django_admin_inline_controls/static/django_admin_inline_controls/js";
+    await import(`${js}/core.js`);
+    await import(`${js}/save.js`);
+    await import(`${js}/actions.js`);
     api = globalThis.DjangoAdminInlineControls;
 });
 
@@ -448,5 +450,55 @@ describe("custom selectors", () => {
             "inline-controls-toolbar",
         );
         expect(root.querySelector(".card .inline-controls-footer")).toBeNull();
+    });
+});
+
+describe("register", () => {
+    it("sets up a feature on inlines already set up", () => {
+        document.body.innerHTML = `
+            <div class="inline-controls" id="books-inline-controls"></div>`;
+        const root = document.getElementById("books-inline-controls");
+        root.dataset.inlineControls = JSON.stringify(config());
+        api.setup(root);
+
+        const seen = [];
+        api.register({ setup: (el, state) => seen.push([el, state]) });
+        expect(seen).toEqual([[root, api.stateOf(root)]]);
+    });
+
+    it("lets a feature handle clicks and keep its widgets from marking the inline dirty", () => {
+        document.body.innerHTML = `
+            <div class="inline-controls" id="books-inline-controls">
+              <button data-custom></button><input name="books-0-title">
+            </div>`;
+        const root = document.getElementById("books-inline-controls");
+        root.dataset.inlineControls = JSON.stringify(config());
+        let clicks = 0;
+        api.register({
+            click: (event) => {
+                if (event.target.matches("[data-custom]")) {
+                    clicks += 1;
+                    return true;
+                }
+                return false;
+            },
+            edit: (event) => event.target.matches("[data-custom]"),
+        });
+        api.setup(root);
+        const button = root.querySelector("[data-custom]");
+        const click = new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+        });
+        button.dispatchEvent(click);
+        expect(clicks).toBe(1);
+        expect(click.defaultPrevented).toBe(true);
+
+        button.dispatchEvent(new Event("change", { bubbles: true }));
+        expect(api.stateOf(root).dirty).toBe(false);
+        root.querySelector("input").dispatchEvent(
+            new Event("input", { bubbles: true }),
+        );
+        expect(api.stateOf(root).dirty).toBe(true);
     });
 });

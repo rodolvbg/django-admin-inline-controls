@@ -13,7 +13,7 @@
         <tr class="inline-controls-tfoot-row" data-footer-row="{{ row.label }}">
           {% if row.label_colspan %}
             <th scope="row" colspan="{{ row.label_colspan }}">
-              {% block tfoot_label %}<span class="inline-controls-footer-label">{{ row.label }}</span>{% endblock tfoot_label %}
+              {% block tfoot_label %}<span class="inline-controls-footer-label">{{ row.label }}</span>{% endblock %}
             </th>
           {% endif %}
           {% for slot in row.cells %}
@@ -21,7 +21,7 @@
               {% if slot.cell %}
                 <td class="inline-controls-footer-value field-{{ slot.cell.column }}">
                   {% if slot.label_here %}<span class="inline-controls-footer-label">{{ row.label }}</span>{% endif %}
-                  <span class="inline-controls-footer-number" data-footer-key="{{ slot.key }}" data-footer-row="{{ row.label }}" data-column="{{ slot.cell.column }}" data-value="{{ slot.cell.raw }}">{% block tfoot_value %}{{ slot.cell.value }}{% endblock tfoot_value %}</span>
+                  <span class="inline-controls-footer-number" data-footer-key="{{ slot.key }}" data-footer-row="{{ row.label }}" data-column="{{ slot.cell.column }}" data-value="{{ slot.cell.raw }}">{% block tfoot_value %}{{ slot.cell.value }}{% endblock %}</span>
                 </td>
               {% else %}
                 <td></td>

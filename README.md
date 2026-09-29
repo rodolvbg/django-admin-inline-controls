@@ -619,6 +619,14 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E102` | `inline_save_button = True` on a nested_admin inline. |
 | `admin_inline_controls.E103` | `inline_actions` on a nested_admin inline. |
 
+## JavaScript files
+
+Each inline loads only the scripts it uses, through its `media`: `core.js`
+(pagination, filters, sorting, placing the controls) always, `save.js`
+with `inline_save_button` and `actions.js` with `inline_actions`. The admin
+merges the media of every inline on the page, so each file loads at most
+once.
+
 ## JavaScript events
 
 After an inline is refreshed in place, or rows are appended, an
