@@ -86,7 +86,7 @@ class OrderingColumn:
 class FooterCell:
     column: str
     column_label: str
-    #: Formatted for display (localized, or the inline's own format).
+    #: Formatted for display by ``format_inline_footer_value()``.
     value: str
     #: Machine-readable value (``"1234.5"``) for the page's JS, or ``""`` when
     #: it isn't a number.

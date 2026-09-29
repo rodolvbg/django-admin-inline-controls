@@ -15,7 +15,8 @@
         if (!group) {
             return [];
         }
-        return core.formRows(group, config.prefix)
+        return core
+            .formRows(group, config.prefix)
             .filter((row) => row.classList.contains("has_original"))
             .map((row) => {
                 const index = row.id.slice(config.prefix.length + 1);
@@ -208,7 +209,12 @@
         } catch {
             state.loading = false;
             root.classList.remove("inline-controls-loading");
-            core.showStatus(root, "failed", config.messages.actionFailed, SCOPE);
+            core.showStatus(
+                root,
+                "failed",
+                config.messages.actionFailed,
+                SCOPE,
+            );
         }
     }
 

@@ -27,7 +27,6 @@ from django.http import (
 from django.template.defaultfilters import floatformat
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path
-from django.utils.formats import localize
 from django.utils.safestring import SafeString
 from django.utils.text import capfirst
 from django.utils.translation import gettext
@@ -313,14 +312,15 @@ class InlineControlsMixin:
 
     def format_inline_footer_value(self, column: str, value: Any) -> Any:
         """Text (or safe HTML) of a footer cell. Override for currencies,
-        units…; the default localizes numbers (2 decimals at most)."""
+        units, localized numbers…; the default is the plain value, floats and
+        decimals rounded to 2 decimals at most (``1234.5``)."""
         if value is None:
             return ""
         if isinstance(value, SafeString):
             return value
         if isinstance(value, float | Decimal):
-            return floatformat(value, -2)
-        return localize(value)
+            return floatformat(value, "-2u")
+        return str(value)
 
     def get_inline_filter_formfield(self, lookup: str) -> forms.Field:
         """Form field used to filter by ``lookup``. Override to customize one."""

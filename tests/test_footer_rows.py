@@ -110,13 +110,16 @@ def test_callables_constants_and_formatting(get_request, author):
     assert rows[2] == ("Empty", {"pages": ""})
 
 
-def test_numbers_are_localized(get_request, author):
-    inline = make_inline(inline_footer_rows=[("Avg", {"pages": Avg("pages")})])
+def test_numbers_are_not_localized(get_request, author, settings):
+    settings.USE_THOUSAND_SEPARATOR = True
+    inline = make_inline(
+        inline_footer_rows=[("All", {"pages": Sum("pages"), "title": Avg("pages")})]
+    )
     Book.objects.filter(author=author, title="Book 25").update(pages=251)
     with translation.override("es"):
         rows = cells(controls(inline, get_request(), author).footer_rows)
 
-    assert rows == [("Avg", {"pages": "130,04"})]
+    assert rows == [("All", {"pages": "3251", "title": "130.04"})]
 
 
 def test_format_hook(get_request, author):
@@ -232,7 +235,7 @@ def test_raw_values_are_rendered_for_the_js(admin_client, author):
     with translation.override("es"):
         html = admin_client.get(url).content.decode()
 
-    # Localized text for people, plain digits for the page's JS.
+    # Formatted text for people, raw digits for the page's JS.
     assert (
         'data-footer-key="1:pages" data-footer-row="Average" data-column="pages" '
         'data-value="130.0">130</span>'

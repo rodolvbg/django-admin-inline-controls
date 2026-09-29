@@ -348,15 +348,17 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
 
 #### Changing how they look
 
-- **The values' format**, in Python: numbers are localized (`1.234,5` in
-  Spanish), floats and decimals rounded to 2 decimals at most. Override
-  `format_inline_footer_value(column, value)` for currencies, units… (return
-  safe HTML for markup):
+- **The values' format**, in Python: by default the plain value, floats
+  and decimals rounded to 2 decimals at most (`1234.5`). Override
+  `format_inline_footer_value(column, value)` for currencies, units,
+  localized numbers… (return safe HTML for markup):
 
   ```python
+  from django.utils.formats import number_format
+
   def format_inline_footer_value(self, column, value):
       if column == "amount":
-          return format_html("{} <small>€</small>", floatformat(value, 2))
+          return format_html("{} <small>USD</small>", number_format(value, 2))
       return super().format_inline_footer_value(column, value)
   ```
 
