@@ -9,7 +9,7 @@
 Pagination, filtering and sortable columns for Django admin inlines —
 without leaving the change form.
 
-![A paginated, filtered and sorted tabular inline](docs/screenshots/hero.png)
+![A tabular inline with an action menu and two selected rows, filters, sorting by pages, live-updated Total and Average rows, page links and the Save books button](docs/screenshots/hero.png)
 
 - **Pagination**: page links, or infinite scroll that appends rows as you
   reach the end of the inline.
