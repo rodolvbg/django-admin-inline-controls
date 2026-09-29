@@ -474,6 +474,18 @@ python manage.py seed_demo      # admin/admin + an author with many books
 python manage.py runserver
 ```
 
+## Translations
+
+Ships a Spanish (`es`) translation; every text of the controls — the
+toolbar, the footer, the generated filter labels ("Title (contains)"), the
+action messages and the JS prompts, which the server sends already
+translated — follows the admin's active language.
+
+Messages identical to Django admin's own ("Filter", "Delete selected
+%(verbose_name_plural)s", …) use the admin's translation, since
+`django.contrib.admin` comes first in `INSTALLED_APPS`: the inline then
+reads exactly like the changelist.
+
 ## Compatibility
 
 Django 4.2 – 6.1, Python 3.10+.

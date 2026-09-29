@@ -1,0 +1,216 @@
+# Spanish translation of django-admin-inline-controls.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: django-admin-inline-controls 0.1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-29 11:04-0500\n"
+"PO-Revision-Date: 2026-09-29 18:00+0200\n"
+"Last-Translator: Rodolfo Becerra\n"
+"Language-Team: Spanish\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? "
+"1 : 2;\n"
+
+#: actions.py
+#, python-format
+msgid "Delete selected %(verbose_name_plural)s"
+msgstr "Eliminar %(verbose_name_plural)s seleccionados"
+
+#: actions.py
+#, python-format
+msgid ""
+"Delete %(count)s selected %(verbose_name_plural)s? This cannot be undone."
+msgstr "¿Eliminar %(count)s %(verbose_name_plural)s seleccionados? No se puede deshacer."
+
+#: actions.py
+#, python-format
+msgid "Cannot delete: %(objects)s are referenced by protected objects."
+msgstr "No se puede eliminar: %(objects)s están referenciados por objetos protegidos."
+
+#: actions.py
+#, python-format
+msgid "Deleted %(count)d %(name)s."
+msgid_plural "Deleted %(count)d %(name)s."
+msgstr[0] "Se eliminó %(count)d %(name)s."
+msgstr[1] "Se eliminaron %(count)d %(name)s."
+msgstr[2] "Se eliminaron %(count)d %(name)s."
+
+#: controls.py
+#, python-format
+msgid "Save %(name)s"
+msgstr "Guardar %(name)s"
+
+#: controls.py
+msgid "You have unsaved changes in this inline that will be lost. Continue?"
+msgstr "Tienes cambios sin guardar en este inline que se perderán. ¿Continuar?"
+
+#: controls.py templates/django_admin_inline_controls/toolbar.html
+msgid "Remove from sorting"
+msgstr "Quitar del orden"
+
+#: controls.py templates/django_admin_inline_controls/toolbar.html
+msgid "Toggle sorting"
+msgstr "Cambiar el orden"
+
+#: controls.py
+msgid "The changes could not be saved. Please try again."
+msgstr "No se pudieron guardar los cambios. Inténtalo de nuevo."
+
+#: controls.py
+msgid "The action could not be run. Please try again."
+msgstr "No se pudo ejecutar la acción. Inténtalo de nuevo."
+
+#: controls.py
+msgid "No action selected."
+msgstr "No se ha seleccionado ninguna acción."
+
+#: controls.py mixins.py
+msgid ""
+"Items must be selected in order to perform actions on them. No items have "
+"been changed."
+msgstr "Se deben seleccionar elementos para poder realizar acciones sobre estos. No se ha modificado ningún elemento."
+
+#: controls.py
+#, python-format
+msgid "%(sel)s of %(cnt)s selected"
+msgstr "%(sel)s de %(cnt)s seleccionados"
+
+#: controls.py
+#, python-format
+msgid "Select all %(total)s"
+msgstr "Seleccionar los %(total)s"
+
+#: controls.py
+#, python-format
+msgid "All %(total)s selected"
+msgstr "Seleccionados los %(total)s"
+
+#: controls.py
+msgid "Select this row"
+msgstr "Seleccionar esta fila"
+
+#: controls.py
+msgid "Select all rows on this page"
+msgstr "Seleccionar todas las filas de esta página"
+
+#: mixins.py
+msgid "contains"
+msgstr "contiene"
+
+#: mixins.py
+msgid "starts with"
+msgstr "empieza por"
+
+#: mixins.py
+msgid "ends with"
+msgstr "termina en"
+
+#: mixins.py
+msgid "after"
+msgstr "después de"
+
+#: mixins.py
+msgid "from"
+msgstr "desde"
+
+#: mixins.py
+msgid "before"
+msgstr "antes de"
+
+#: mixins.py
+msgid "to"
+msgstr "hasta"
+
+#: mixins.py
+msgid "in"
+msgstr "en"
+
+#: mixins.py
+msgid "is empty"
+msgstr "vacío"
+
+#: mixins.py
+msgid "year"
+msgstr "año"
+
+#: mixins.py
+msgid "month"
+msgstr "mes"
+
+#: mixins.py
+msgid "day"
+msgstr "día"
+
+#: mixins.py
+msgid "Yes"
+msgstr "Sí"
+
+#: mixins.py
+msgid "No"
+msgstr "No"
+
+#: mixins.py
+msgid "Please correct the errors below."
+msgstr "Por favor, corrija los errores detallados abajo."
+
+#: mixins.py
+msgid "Saved."
+msgstr "Guardado."
+
+#: mixins.py
+msgid "Done."
+msgstr "Hecho."
+
+#: templates/django_admin_inline_controls/footer.html
+#, python-format
+msgid "Showing %(loaded)s of %(total)s"
+msgstr "Mostrando %(loaded)s de %(total)s"
+
+#: templates/django_admin_inline_controls/footer.html
+msgid "Load more"
+msgstr "Cargar más"
+
+#: templates/django_admin_inline_controls/footer.html
+msgid "Pagination"
+msgstr "Paginación"
+
+#: templates/django_admin_inline_controls/footer.html
+#, python-format
+msgid "%(counter)s result"
+msgid_plural "%(counter)s results"
+msgstr[0] "%(counter)s resultado"
+msgstr[1] "%(counter)s resultados"
+msgstr[2] "%(counter)s resultados"
+
+#: templates/django_admin_inline_controls/footer.html
+msgid ""
+"Saves only this inline. Other changes on the page are kept but not saved."
+msgstr "Guarda solo este inline. Los demás cambios de la página se mantienen, pero no se guardan."
+
+#: templates/django_admin_inline_controls/toolbar.html
+msgid "Action:"
+msgstr "Acción:"
+
+#: templates/django_admin_inline_controls/toolbar.html
+msgid "Run the selected action"
+msgstr "Ejecutar la acción seleccionada"
+
+#: templates/django_admin_inline_controls/toolbar.html
+msgid "Go"
+msgstr "Ir"
+
+#: templates/django_admin_inline_controls/toolbar.html
+msgid "Filter"
+msgstr "Filtrar"
+
+#: templates/django_admin_inline_controls/toolbar.html
+msgid "Clear"
+msgstr "Limpiar"
+
+#: templates/django_admin_inline_controls/toolbar.html
+msgid "Sort by:"
+msgstr "Ordenar por:"

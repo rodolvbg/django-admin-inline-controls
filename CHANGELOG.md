@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Template blocks throughout the wrapper, toolbar, footer and response
   templates, and per-inline `inline_controls_toolbar_template` /
   `inline_controls_footer_template`, so they can be extended.
+- Spanish translation (`locale/es`).
 - System checks for every option.
 - `contrib.filters` (`[filters]` extra): django-filter `FilterSet` support.
 - `contrib.nested` (`[nested]` extra): django-nested-admin support.
