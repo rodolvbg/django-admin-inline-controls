@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -34,8 +34,12 @@ from django_admin_inline_controls.controls import (
     INFINITE,
     PAGES,
     InlineControls,
-    OrderingValue,
     bound_primary_keys,
+)
+from django_admin_inline_controls.types import (
+    FilterResult,
+    InlineActions,
+    OrderingFields,
 )
 
 LOOKUP_LABELS = {
@@ -220,7 +224,7 @@ class InlineControlsMixin:
     #: Sortable columns: field names, or ``{column: expression}`` where the
     #: expression is a field path, an ORM expression or an
     #: ``(ascending, descending)`` pair.
-    inline_ordering_fields: Sequence[str] | Mapping[str, OrderingValue] = ()
+    inline_ordering_fields: OrderingFields = ()
     #: Ordering applied after the user's, before the ``pk`` tie-breaker.
     #: Defaults to the queryset's or the model's ordering.
     inline_default_ordering: Sequence[Any] = ()
@@ -265,7 +269,7 @@ class InlineControlsMixin:
 
     def get_inline_ordering_fields(
         self, request: HttpRequest, obj: Any
-    ) -> Sequence[str] | Mapping[str, OrderingValue]:
+    ) -> OrderingFields:
         return self.inline_ordering_fields
 
     def get_inline_filter_fields(self, request: HttpRequest, obj: Any) -> Sequence[str]:
@@ -305,7 +309,7 @@ class InlineControlsMixin:
         queryset: QuerySet,
         data: QueryDict,
         prefix: str,
-    ) -> tuple[Form | None, QuerySet]:
+    ) -> FilterResult:
         """Return the bound filter form (or ``None``) and the filtered queryset."""
         form_class = self.get_inline_filter_form_class(request, obj)
         if form_class is None:
@@ -357,11 +361,9 @@ class InlineControlsMixin:
             return action, BUILTIN_ACTIONS[action]
         raise AttributeError(action)
 
-    def get_inline_actions(
-        self, request: HttpRequest, obj: Any
-    ) -> dict[str, InlineActionSpec]:
+    def get_inline_actions(self, request: HttpRequest, obj: Any) -> InlineActions:
         """Actions available to this user, keyed by name."""
-        actions: dict[str, InlineActionSpec] = {}
+        actions: InlineActions = {}
         # Unknown placeholders (``%(count)s``) are left for the JS to fill.
         names = _KeepMissing(model_format_dict(self.model._meta))
         for action in self.inline_actions:

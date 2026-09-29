@@ -13,10 +13,10 @@ except ImportError as e:
     ) from e
 
 from django.db.models import QuerySet
-from django.forms import Form
 from django.http import HttpRequest, QueryDict
 
 from django_admin_inline_controls.mixins import InlineControlsMixin
+from django_admin_inline_controls.types import FilterResult
 
 
 class FilterSetInlineControlsMixin(InlineControlsMixin):
@@ -50,7 +50,7 @@ class FilterSetInlineControlsMixin(InlineControlsMixin):
         queryset: QuerySet,
         data: QueryDict,
         prefix: str,
-    ) -> tuple[Form | None, QuerySet]:
+    ) -> FilterResult:
         filterset_class = self.get_inline_filterset_class(request, obj)
         if filterset_class is None:
             return super().get_inline_filtered_queryset(

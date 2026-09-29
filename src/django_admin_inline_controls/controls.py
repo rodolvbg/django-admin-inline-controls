@@ -9,7 +9,7 @@ templates and the JS need.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -17,7 +17,7 @@ from django.contrib.admin.utils import label_for_field, quote
 from django.core.exceptions import ValidationError
 from django.core.paginator import Page, Paginator
 from django.db.models import QuerySet
-from django.db.models.expressions import BaseExpression, OrderBy
+from django.db.models.expressions import OrderBy
 from django.forms import Form
 from django.http import HttpRequest, QueryDict
 from django.urls import NoReverseMatch, reverse
@@ -25,13 +25,13 @@ from django.utils.functional import cached_property
 from django.utils.text import capfirst
 from django.utils.translation import gettext
 
+from django_admin_inline_controls.types import Ordering, OrderingFields, OrderingValue
+
 if TYPE_CHECKING:
     from django_admin_inline_controls.mixins import InlineControlsMixin
 
 PAGES = "pages"
 INFINITE = "infinite"
-
-OrderingValue = str | BaseExpression | tuple[Any, Any]
 
 
 @dataclass(frozen=True)
@@ -64,7 +64,7 @@ class PageLink:
 
 
 def normalize_ordering_fields(
-    ordering_fields: Sequence[str] | Mapping[str, OrderingValue],
+    ordering_fields: OrderingFields,
 ) -> dict[str, OrderingValue]:
     """Return ``{column: expression}`` from a sequence or mapping."""
     if isinstance(ordering_fields, Mapping):
@@ -211,13 +211,13 @@ class InlineControls:
 
     # Ordering --------------------------------------------------------------
 
-    def _parse_ordering(self) -> list[tuple[str, bool]]:
+    def _parse_ordering(self) -> Ordering:
         """Parse ``?<prefix>-o=name,-date`` keeping only declared columns.
 
         Unknown names are dropped: ordering by an arbitrary field would let
         anyone infer the values of fields the inline never shows.
         """
-        ordering: list[tuple[str, bool]] = []
+        ordering: Ordering = []
         seen: set[str] = set()
         for token in self.params.get(self.ordering_param, "").split(","):
             name = token.strip().removeprefix("-")
@@ -226,7 +226,7 @@ class InlineControls:
                 ordering.append((name, token.strip().startswith("-")))
         return ordering
 
-    def _encode_ordering(self, ordering: list[tuple[str, bool]]) -> str:
+    def _encode_ordering(self, ordering: Ordering) -> str:
         return ",".join(f"-{name}" if desc else name for name, desc in ordering)
 
     @property
