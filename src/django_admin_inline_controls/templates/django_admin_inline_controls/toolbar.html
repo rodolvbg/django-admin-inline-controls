@@ -1,53 +1,93 @@
 {% load i18n %}
-{% if controls.has_toolbar %}
-  <div class="inline-controls-toolbar">
-    {% if controls.actions %}
-      <div class="inline-controls-actions">
-        <label>
-          {% translate "Action:" %}
-          <select name="action" form="{{ controls.actions_form_id }}" data-inline-controls-action>
-            <option value="">---------</option>
-            {% for action in controls.actions %}
-              <option value="{{ action.name }}">{{ action.description }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <button type="button" class="button" data-inline-controls-run title="{% translate 'Run the selected action' %}">{% translate "Go" %}</button>
-        <span class="inline-controls-selection" data-inline-controls-selection></span>
-        <a href="#" class="inline-controls-select-across" data-inline-controls-select-across hidden></a>
-        <span class="inline-controls-status" role="status" aria-live="polite"></span>
-      </div>
-    {% endif %}
-    {% if controls.filter_form %}
-      <div class="inline-controls-filters" role="search">
-        {% for field in controls.filter_form %}
-          <div class="inline-controls-filter{% if field.errors %} errors{% endif %}">
-            {{ field.label_tag }}
-            {{ field }}
-            {{ field.errors }}
+{% comment %}
+  Toolbar above the inline: actions, filters and (for stacked inlines, or
+  columns without a header) sort links. Override per inline with
+  `inline_controls_toolbar_template`. The JS moves this element under the
+  inline's heading and relies on the data-inline-controls-* attributes.
+{% endcomment %}
+{% block toolbar %}
+  {% if controls.has_toolbar %}
+    <div class="inline-controls-toolbar{% block toolbar_classes %}{% endblock %}">
+      {% block toolbar_start %}{% endblock %}
+
+      {% block actions %}
+        {% if controls.actions %}
+          <div class="inline-controls-actions">
+            {% block action_menu %}
+              <label>
+                {% block action_label %}{% translate "Action:" %}{% endblock %}
+                <select name="action" form="{{ controls.actions_form_id }}" data-inline-controls-action>
+                  {% block action_empty_option %}<option value="">---------</option>{% endblock %}
+                  {% for action in controls.actions %}
+                    {% block action_option %}<option value="{{ action.name }}">{{ action.description }}</option>{% endblock %}
+                  {% endfor %}
+                </select>
+              </label>
+            {% endblock action_menu %}
+            {% block action_button %}
+              <button type="button" class="button" data-inline-controls-run title="{% translate 'Run the selected action' %}">{% block action_button_label %}{% translate "Go" %}{% endblock %}</button>
+            {% endblock action_button %}
+            {% block action_selection %}
+              <span class="inline-controls-selection" data-inline-controls-selection></span>
+              <a href="#" class="inline-controls-select-across" data-inline-controls-select-across hidden></a>
+            {% endblock action_selection %}
+            {% block action_status %}
+              <span class="inline-controls-status" role="status" aria-live="polite"></span>
+            {% endblock action_status %}
           </div>
-        {% endfor %}
-        <div class="inline-controls-filter-buttons">
-          <button type="button" class="button" data-inline-controls-apply>{% translate "Filter" %}</button>
-          {% if controls.is_filtered %}
-            <button type="button" class="button" data-inline-controls-clear>{% translate "Clear" %}</button>
-          {% endif %}
-        </div>
-      </div>
-    {% endif %}
-    {% if controls.ordering_columns %}
-      <div class="inline-controls-ordering">
-        <span class="inline-controls-ordering-label">{% translate "Sort by:" %}</span>
-        {% for column in controls.ordering_columns %}
-          <span class="inline-controls-sort{% if column.direction %} inline-controls-{{ column.direction }}{% endif %}">
-            <a href="{{ column.toggle_url }}" class="inline-controls-sort-toggle" data-inline-controls-nav title="{% translate 'Toggle sorting' %}">{{ column.label }}</a>
-            {% if column.priority %}
-              <span class="inline-controls-sort-priority">{{ column.priority }}</span>
-              <a href="{{ column.remove_url }}" class="inline-controls-sort-remove" data-inline-controls-nav title="{% translate 'Remove from sorting' %}">&times;</a>
-            {% endif %}
-          </span>
-        {% endfor %}
-      </div>
-    {% endif %}
-  </div>
-{% endif %}
+        {% endif %}
+      {% endblock actions %}
+
+      {% block filters %}
+        {% if controls.filter_form %}
+          <div class="inline-controls-filters" role="search">
+            {% block filter_fields %}
+              {% for field in controls.filter_form %}
+                {% block filter_field %}
+                  <div class="inline-controls-filter{% if field.errors %} errors{% endif %}">
+                    {{ field.label_tag }}
+                    {{ field }}
+                    {{ field.errors }}
+                  </div>
+                {% endblock filter_field %}
+              {% endfor %}
+            {% endblock filter_fields %}
+            {% block filter_buttons %}
+              <div class="inline-controls-filter-buttons">
+                {% block filter_apply_button %}
+                  <button type="button" class="button" data-inline-controls-apply>{% block filter_apply_label %}{% translate "Filter" %}{% endblock %}</button>
+                {% endblock filter_apply_button %}
+                {% block filter_clear_button %}
+                  {% if controls.is_filtered %}
+                    <button type="button" class="button" data-inline-controls-clear>{% block filter_clear_label %}{% translate "Clear" %}{% endblock %}</button>
+                  {% endif %}
+                {% endblock filter_clear_button %}
+              </div>
+            {% endblock filter_buttons %}
+          </div>
+        {% endif %}
+      {% endblock filters %}
+
+      {% block ordering %}
+        {% if controls.ordering_columns %}
+          <div class="inline-controls-ordering">
+            {% block ordering_label %}<span class="inline-controls-ordering-label">{% translate "Sort by:" %}</span>{% endblock %}
+            {% for column in controls.ordering_columns %}
+              {% block ordering_column %}
+                <span class="inline-controls-sort{% if column.direction %} inline-controls-{{ column.direction }}{% endif %}">
+                  <a href="{{ column.toggle_url }}" class="inline-controls-sort-toggle" data-inline-controls-nav title="{% translate 'Toggle sorting' %}">{{ column.label }}</a>
+                  {% if column.priority %}
+                    <span class="inline-controls-sort-priority">{{ column.priority }}</span>
+                    <a href="{{ column.remove_url }}" class="inline-controls-sort-remove" data-inline-controls-nav title="{% translate 'Remove from sorting' %}">&times;</a>
+                  {% endif %}
+                </span>
+              {% endblock ordering_column %}
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endblock ordering %}
+
+      {% block toolbar_end %}{% endblock %}
+    </div>
+  {% endif %}
+{% endblock toolbar %}

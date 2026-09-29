@@ -1,11 +1,31 @@
-{% with controls=inline_admin_formset.formset.inline_controls %}
+{% comment %}
+  Wrapper around the inline's own template. Override per inline with
+  `inline_controls_template` (e.g. a template that extends this one).
+  The JS relies on the id, the data-inline-controls attribute and the
+  inline-controls-* classes: keep them when overriding blocks.
+{% endcomment %}
+{% with controls=inline_admin_formset.formset.inline_controls opts=inline_admin_formset.opts %}
   {% if controls %}
-    <div class="inline-controls" id="{{ controls.container_id }}" data-inline-controls="{{ controls.config_json }}">
-      {% include "django_admin_inline_controls/toolbar.html" %}
-      {% include inline_admin_formset.opts.inline_controls_inner_template %}
-      {% include "django_admin_inline_controls/footer.html" %}
-    </div>
+    {% block container %}
+      <div class="inline-controls{% block container_classes %}{% endblock %}" id="{{ controls.container_id }}" data-inline-controls="{{ controls.config_json }}"{% block container_attrs %}{% endblock %}>
+        {% block before_toolbar %}{% endblock %}
+        {% block toolbar %}
+          {% include opts.inline_controls_toolbar_template %}
+        {% endblock toolbar %}
+        {% block before_inline %}{% endblock %}
+        {% block inline %}
+          {% include opts.inline_controls_inner_template %}
+        {% endblock inline %}
+        {% block after_inline %}{% endblock %}
+        {% block footer %}
+          {% include opts.inline_controls_footer_template %}
+        {% endblock footer %}
+        {% block after_footer %}{% endblock %}
+      </div>
+    {% endblock container %}
   {% else %}
-    {% include inline_admin_formset.opts.inline_controls_inner_template %}
+    {% block inline_without_controls %}
+      {% include opts.inline_controls_inner_template %}
+    {% endblock inline_without_controls %}
   {% endif %}
 {% endwith %}

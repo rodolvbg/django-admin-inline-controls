@@ -30,6 +30,20 @@ class CustomFormBookInline(InlineControlsMixin, admin.TabularInline):
         return super().filter_inline_queryset(request, queryset, filters)
 
 
+class CustomTemplatesBookInline(InlineControlsMixin, admin.TabularInline):
+    """Every template extended, a few blocks overridden."""
+
+    model = Book
+    extra = 0
+    fields = ["title"]
+    verbose_name_plural = "custom books"
+    inline_per_page = 5
+    inline_filter_fields = ["status"]
+    inline_controls_template = "custom/inline.html"
+    inline_controls_toolbar_template = "custom/toolbar.html"
+    inline_controls_footer_template = "custom/footer.html"
+
+
 class PlainBookInline(InlineControlsMixin, admin.TabularInline):
     """No pagination, filters or ordering: must render like a normal inline."""
 
@@ -40,7 +54,7 @@ class PlainBookInline(InlineControlsMixin, admin.TabularInline):
 
 @admin.register(Author, site=site)
 class AuthorAdmin(admin.ModelAdmin):
-    inlines = [CustomFormBookInline, PlainBookInline]
+    inlines = [CustomFormBookInline, PlainBookInline, CustomTemplatesBookInline]
 
 
 try:

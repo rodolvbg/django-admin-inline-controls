@@ -1,0 +1,3 @@
+{% extends "django_admin_inline_controls/footer.html" %}
+{% block result_count %}<span class="inline-controls-count">{{ controls.total_count }} books</span>{% endblock result_count %}
+{% block page_link %}<i class="my-page">{{ block.super }}</i>{% endblock page_link %}

@@ -240,8 +240,12 @@ class InlineControlsMixin:
     #: names, callables, or ``"delete_selected"``. Requires
     #: ``InlineControlsAdminMixin`` on the parent ``ModelAdmin``.
     inline_actions: Sequence[str | Callable[..., Any]] = ()
-    #: Wrapper template; it includes the inline's own ``template``.
+    #: Wrapper template; it includes the inline's own ``template``, the
+    #: toolbar and the footer. Each one can extend the library's and
+    #: override its blocks.
     inline_controls_template = "django_admin_inline_controls/inline.html"
+    inline_controls_toolbar_template = "django_admin_inline_controls/toolbar.html"
+    inline_controls_footer_template = "django_admin_inline_controls/footer.html"
 
     # Provided by InlineModelAdmin.
     model: type[models.Model]

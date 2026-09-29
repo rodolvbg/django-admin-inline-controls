@@ -1,13 +1,13 @@
 import json
 
 import pytest
+from demo.models import Author, Book
 from django.contrib import admin, messages
 from django.contrib.admin.models import LogEntry
 from django.contrib.auth.models import Permission, User
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponseRedirect
 from django.urls import reverse
 
-from demo.models import Author, Book
 from django_admin_inline_controls.actions import delete_selected, inline_action
 from django_admin_inline_controls.mixins import InlineControlsMixin
 from tests.test_inline_controls import change_url, config, formset
@@ -135,7 +135,7 @@ def test_delete_selected_reports_protected_objects(admin_user, rf, author, monke
     monkeypatch.setattr(Book, "delete", protected)
     sent = []
     inline = type(
-        "Inline", (), {"message_user": lambda s, r, m, l: sent.append((m, l))}
+        "Inline", (), {"message_user": lambda s, r, m, level: sent.append((m, level))}
     )()
     delete_selected(inline, rf.post("/"), Book.objects.filter(pk=book.pk))
 
@@ -149,7 +149,10 @@ def test_delete_selected_without_parent_skips_history(rf, author):
     inline = type(
         "Inline",
         (),
-        {"admin_site": admin.site, "message_user": lambda s, r, m, l: sent.append(m)},
+        {
+            "admin_site": admin.site,
+            "message_user": lambda s, r, m, level: sent.append(m),
+        },
     )()
     delete_selected(inline, rf.post("/"), Book.objects.filter(title="Book 01"))
 

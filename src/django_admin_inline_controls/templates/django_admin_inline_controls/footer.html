@@ -1,38 +1,71 @@
 {% load i18n %}
-{% if controls.has_footer %}
-  <div class="inline-controls-footer{% if controls.mode == 'infinite' %} inline-controls-infinite{% endif %}">
-    {% if controls.paginator %}
-      {% if controls.mode == "infinite" %}
-        <span class="inline-controls-count">
-          {% blocktranslate with loaded=controls.loaded_count|default:0 total=controls.total_count %}Showing {{ loaded }} of {{ total }}{% endblocktranslate %}
-        </span>
-        {% if controls.next_page_url %}
-          <a href="{{ controls.next_page_url }}" class="inline-controls-load-more" data-inline-controls-more>{% translate "Load more" %}</a>
-        {% endif %}
-      {% else %}
-        <nav class="inline-controls-pagination" aria-label="{% translate 'Pagination' %}">
-          {% if controls.is_paginated %}
-            {% for link in controls.page_links %}
-              {% if link.url is None %}
-                <span class="inline-controls-ellipsis">{{ link.number }}</span>
-              {% elif link.current %}
-                <span class="inline-controls-page inline-controls-current" aria-current="page">{{ link.number }}</span>
-              {% else %}
-                <a href="{{ link.url }}" class="inline-controls-page" data-inline-controls-nav>{{ link.number }}</a>
-              {% endif %}
-            {% endfor %}
+{% comment %}
+  Footer below the inline: pagination or infinite-scroll status and the
+  save-inline button. Override per inline with
+  `inline_controls_footer_template`. The JS moves this element to the end
+  of the inline and relies on the data-inline-controls-* attributes.
+{% endcomment %}
+{% block footer %}
+  {% if controls.has_footer %}
+    <div class="inline-controls-footer{% if controls.mode == 'infinite' %} inline-controls-infinite{% endif %}{% block footer_classes %}{% endblock %}">
+      {% block footer_start %}{% endblock %}
+
+      {% block pagination %}
+        {% if controls.paginator %}
+          {% if controls.mode == "infinite" %}
+            {% block infinite %}
+              {% block infinite_count %}
+                <span class="inline-controls-count">
+                  {% blocktranslate with loaded=controls.loaded_count|default:0 total=controls.total_count %}Showing {{ loaded }} of {{ total }}{% endblocktranslate %}
+                </span>
+              {% endblock infinite_count %}
+              {% block load_more %}
+                {% if controls.next_page_url %}
+                  <a href="{{ controls.next_page_url }}" class="inline-controls-load-more" data-inline-controls-more>{% block load_more_label %}{% translate "Load more" %}{% endblock %}</a>
+                {% endif %}
+              {% endblock load_more %}
+            {% endblock infinite %}
+          {% else %}
+            {% block page_links %}
+              <nav class="inline-controls-pagination" aria-label="{% translate 'Pagination' %}">
+                {% if controls.is_paginated %}
+                  {% for link in controls.page_links %}
+                    {% block page_link %}
+                      {% if link.url is None %}
+                        <span class="inline-controls-ellipsis">{{ link.number }}</span>
+                      {% elif link.current %}
+                        <span class="inline-controls-page inline-controls-current" aria-current="page">{{ link.number }}</span>
+                      {% else %}
+                        <a href="{{ link.url }}" class="inline-controls-page" data-inline-controls-nav>{{ link.number }}</a>
+                      {% endif %}
+                    {% endblock page_link %}
+                  {% endfor %}
+                {% endif %}
+              </nav>
+            {% endblock page_links %}
+            {% block result_count %}
+              <span class="inline-controls-count">
+                {% blocktranslate count counter=controls.total_count %}{{ counter }} result{% plural %}{{ counter }} results{% endblocktranslate %}
+              </span>
+            {% endblock result_count %}
           {% endif %}
-        </nav>
-        <span class="inline-controls-count">
-          {% blocktranslate count counter=controls.total_count %}{{ counter }} result{% plural %}{{ counter }} results{% endblocktranslate %}
-        </span>
-      {% endif %}
-    {% endif %}
-    {% if controls.save_url %}
-      <div class="inline-controls-save">
-        <span class="inline-controls-status" role="status" aria-live="polite"></span>
-        <button type="button" class="button default" data-inline-controls-save title="{% translate 'Saves only this inline. Other changes on the page are kept but not saved.' %}">{{ controls.save_label }}</button>
-      </div>
-    {% endif %}
-  </div>
-{% endif %}
+        {% endif %}
+      {% endblock pagination %}
+
+      {% block save %}
+        {% if controls.save_url %}
+          <div class="inline-controls-save">
+            {% block save_status %}
+              <span class="inline-controls-status" role="status" aria-live="polite"></span>
+            {% endblock save_status %}
+            {% block save_button %}
+              <button type="button" class="button default" data-inline-controls-save title="{% translate 'Saves only this inline. Other changes on the page are kept but not saved.' %}">{% block save_label %}{{ controls.save_label }}{% endblock %}</button>
+            {% endblock save_button %}
+          </div>
+        {% endif %}
+      {% endblock save %}
+
+      {% block footer_end %}{% endblock %}
+    </div>
+  {% endif %}
+{% endblock footer %}

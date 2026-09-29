@@ -347,6 +347,96 @@ sorting and page links reload the page instead of swapping the inline, and
 infinite scroll, the save-inline button and inline actions are not
 available.
 
+## Customizing templates
+
+Three templates render the controls around the inline's own `template`
+(which is left untouched: `admin/edit_inline/tabular.html`, a custom one,
+…). Each is chosen per inline, so a template of yours can extend the
+library's and override only the blocks it needs:
+
+| Option | Default | Renders |
+|---|---|---|
+| `inline_controls_template` | `django_admin_inline_controls/inline.html` | The wrapper: toolbar, the inline itself, footer. |
+| `inline_controls_toolbar_template` | `django_admin_inline_controls/toolbar.html` | Actions, filters, sort links. |
+| `inline_controls_footer_template` | `django_admin_inline_controls/footer.html` | Pagination / infinite scroll, save button. |
+
+```python
+class BookInline(InlineControlsMixin, admin.TabularInline):
+    model = Book
+    inline_controls_toolbar_template = "admin/demo/book_inline_toolbar.html"
+```
+
+```django
+{# templates/admin/demo/book_inline_toolbar.html #}
+{% extends "django_admin_inline_controls/toolbar.html" %}
+
+{% block filter_apply_label %}Search{% endblock %}
+
+{% block filter_field %}
+  <div class="my-filter">{{ block.super }}</div>
+{% endblock %}
+
+{% block toolbar_end %}
+  <a href="{% url 'book-help' %}">Help</a>
+{% endblock %}
+```
+
+To change them for every inline, put templates with the same paths in your
+project's `templates/` directory (before the app templates), or set the
+options on a base inline class of your own.
+
+In all three, `controls` is the inline's state (filter form, ordering
+columns, page links, actions, URLs…) and `inline_admin_formset` is
+Django's. The JS finds its elements by the `inline-controls-*` classes, the
+`data-inline-controls-*` attributes and the container's id: keep them when
+you replace a block's markup (`{{ block.super }}` keeps the original).
+
+**`inline.html`**
+
+| Block | Contains |
+|---|---|
+| `container` | The whole wrapper `<div>`. |
+| `container_classes`, `container_attrs` | Extra classes / attributes for the wrapper (empty). |
+| `before_toolbar`, `before_inline`, `after_inline`, `after_footer` | Empty slots between the parts. |
+| `toolbar` | Includes `inline_controls_toolbar_template`. |
+| `inline` | Includes the inline's own template. |
+| `footer` | Includes `inline_controls_footer_template`. |
+| `inline_without_controls` | What is rendered when the controls are off (the add view). |
+
+**`toolbar.html`**
+
+| Block | Contains |
+|---|---|
+| `toolbar` | The whole toolbar. |
+| `toolbar_classes` | Extra classes (empty). |
+| `toolbar_start`, `toolbar_end` | Empty slots at both ends. |
+| `actions` | The action bar. |
+| `action_menu`, `action_label`, `action_empty_option`, `action_option` | The "Action:" select and its options (`action_option` is rendered once per action, with `action`). |
+| `action_button`, `action_button_label` | The **Go** button. |
+| `action_selection` | The "2 of 25 selected" count and the "Select all" link. |
+| `action_status` | Where action messages appear. |
+| `filters` | The filter form. |
+| `filter_fields`, `filter_field` | All fields / one field (once per field, with `field`). |
+| `filter_buttons`, `filter_apply_button`, `filter_apply_label`, `filter_clear_button`, `filter_clear_label` | The **Filter** and **Clear** buttons. |
+| `ordering`, `ordering_label`, `ordering_column` | The "Sort by:" links (once per column, with `column`). |
+
+**`footer.html`**
+
+| Block | Contains |
+|---|---|
+| `footer` | The whole footer. |
+| `footer_classes` | Extra classes (empty). |
+| `footer_start`, `footer_end` | Empty slots at both ends. |
+| `pagination` | Page links or the infinite-scroll status. |
+| `page_links`, `page_link` | The page links (`page_link` once per link, with `link`). |
+| `result_count` | "25 results". |
+| `infinite`, `infinite_count`, `load_more`, `load_more_label` | Infinite mode: "Showing 15 of 70" and "Load more". |
+| `save`, `save_status`, `save_button`, `save_label` | The save-inline button and its status. |
+
+**`inline_response.html`** (the save/action endpoints' response):
+`response`, `inlines`. Set `inline_controls_response_template` on the
+`ModelAdmin` to use another one.
+
 ## System checks
 
 Misconfigurations are reported by `manage.py check` (and at startup):

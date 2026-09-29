@@ -1,0 +1,4 @@
+{% extends "django_admin_inline_controls/toolbar.html" %}
+{% block filter_apply_label %}Search{% endblock filter_apply_label %}
+{% block filter_field %}<div class="my-filter">{{ block.super }}</div>{% endblock filter_field %}
+{% block toolbar_end %}<a class="my-help" href="/help/">Help</a>{% endblock toolbar_end %}

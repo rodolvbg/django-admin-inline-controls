@@ -88,8 +88,11 @@ def test_plain_inline_renders_like_a_normal_inline(admin_client, author):
 
     assert len(plain.initial_forms) == 25
     assert plain.inline_controls.paginator is None
-    assert b'class="inline-controls-toolbar"' in response.content  # custom one
-    assert response.content.count(b'class="inline-controls-toolbar"') == 1
+    html = response.content.decode()
+    start = html.index('id="books-2-inline-controls"')
+    plain_html = html[start : html.index('id="books-3-inline-controls"')]
+    assert "inline-controls-toolbar" not in plain_html
+    assert "inline-controls-footer" not in plain_html
 
 
 # Ordering -------------------------------------------------------------------
