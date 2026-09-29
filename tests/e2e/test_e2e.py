@@ -351,3 +351,60 @@ def test_rows_loaded_later_get_checkboxes(change_page: Page):
     )
     expect(saved_rows(page, "articles")).to_have_count(20)
     expect(page.locator("#articles-group .inline-controls-select")).to_have_count(20)
+
+
+@pytest.fixture
+def themed_page(live_server, page: Page, admin_user, author):
+    """The test admin's inline with a theme-like markup (``books-4``)."""
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(
+        f"{live_server.url}/admin/login/?next=/test-admin/demo/author/{author.pk}/change/"
+    )
+    page.fill("#id_username", "admin")
+    page.fill("#id_password", "password")
+    page.click("input[type=submit]")
+    expect(page.locator("#books-4-inline-controls")).to_be_visible()
+    page.evaluate("window.__noReload = true")
+    yield page
+    page.wait_for_load_state("networkidle")
+    page.close()
+    assert errors == []
+
+
+def test_selectors_adapt_to_another_markup(themed_page: Page, author):
+    page = themed_page
+    card = page.locator("#books-4-group .card")
+    # Toolbar right after the card's title, footer at the card's end.
+    expect(card.locator(".card-title + .inline-controls-toolbar")).to_have_count(1)
+    expect(card.locator(":scope > .inline-controls-footer")).to_have_count(1)
+    # Sortable header found through the configured selector.
+    header = page.locator('#books-4-group th[data-col="pages"]')
+    header.locator(".inline-controls-sort-toggle").click()
+    expect(page.locator('#books-4-group th[data-col="pages"]')).to_have_class(
+        re.compile(r"\binline-controls-ascending\b")
+    )
+    assert "books-4-o=pages" in page.url
+    assert page.evaluate("window.__noReload") is True
+    # Django's "Add another" was re-initialized with the configured rows.
+    expect(page.locator("#books-4-group .add-row")).to_have_count(1)
+
+    # Row checkboxes sit in the configured label, and actions work.
+    boxes = page.locator(
+        "#books-4-group td.row-name > .label > .inline-controls-select"
+    )
+    expect(boxes).to_have_count(5)
+    first_title = page.input_value(
+        "#books-4-group tr.has_original input[name$='-title']"
+    )
+    boxes.first.check()
+    page.select_option(
+        "#books-4-inline-controls [data-inline-controls-action]", "delete_selected"
+    )
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click("#books-4-inline-controls [data-inline-controls-run]")
+    status = page.locator(
+        "#books-4-inline-controls .inline-controls-actions .inline-controls-status"
+    )
+    expect(status).to_have_text("Deleted 1 book.")
+    assert not Book.objects.filter(author=author, title=first_title).exists()

@@ -437,6 +437,64 @@ you replace a block's markup (`{{ block.super }}` keeps the original).
 `response`, `inlines`. Set `inline_controls_response_template` on the
 `ModelAdmin` to use another one.
 
+## Adapting to another admin markup
+
+The templates decide the HTML of the controls, but the JS also has to find
+its way in the **inline's** markup — Django's `tabular.html` /
+`stacked.html`, or whatever your theme (Unfold, Jazzmin, Grappelli…) or
+your own inline template renders. Where to look is configurable per inline
+with `inline_controls_selectors`, merged over these defaults
+(`DEFAULT_SELECTORS` in `django_admin_inline_controls.controls`):
+
+| Key | Default | Used for |
+|---|---|---|
+| `container` | `.inline-group fieldset` | Where the toolbar and footer are moved to. |
+| `heading` | `h2` | Inside `container`: the toolbar goes right after it (or its `<summary>`). |
+| `footer_parent` | `:scope > details` | Inside `container`: the footer is appended here, else to `container`. |
+| `table_head` | `.inline-group table thead` | The header row with the sortable columns. |
+| `column_header` | `th.column-{name}` | A sortable column's header (`{name}`: the column). |
+| `row_label` | `:scope > td.original > p`, `:scope > h3`, `:scope > td.original` | Inside a saved row: where its action checkbox goes. |
+| `tabular_rows` | `{group} .tabular.inline-related tbody:first > tr.form-row` | jQuery selector of the rows Django's `inlines.js` manages, re-initialized after a refresh (`{group}`: `#<prefix>-group`). |
+| `stacked_rows` | `{group} .inline-related` | The same for stacked inlines. |
+
+Each value is one selector or a list tried in order. Only set the keys that
+differ:
+
+```python
+class BookInline(InlineControlsMixin, admin.TabularInline):
+    model = Book
+    template = "admin/my_theme/tabular.html"
+    inline_ordering_fields = ["title", "pages"]
+    inline_controls_selectors = {
+        "container": ".card",
+        "heading": ".card-title",
+        "table_head": "table.grid thead",
+        "column_header": 'th[data-col="{name}"]',
+        "row_label": ":scope > td.row-name > .label",
+        "tabular_rows": "{group} table.grid tbody > tr.form-row",
+    }
+```
+
+For a whole theme, set it on a base inline class of your own. When
+something isn't found, the controls degrade instead of breaking: sort links
+stay in the toolbar if a column header is missing, checkboxes go into the
+row itself, and the toolbar and footer stay around the inline. Row ids
+(`<prefix>-<n>`) and the management form come from Django's formset, so
+they are never configured.
+
+To place the toolbar and footer yourself, listen for
+`inline-controls:place` (it bubbles from the controls' wrapper,
+`.inline-controls`, before they are moved) and cancel it:
+
+```js
+document.addEventListener("inline-controls:place", (event) => {
+    const { toolbar, footer } = event.detail;
+    event.target.querySelector(".my-panel-header").append(toolbar);
+    event.target.querySelector(".my-panel-footer").append(footer);
+    event.preventDefault();
+});
+```
+
 ## System checks
 
 Misconfigurations are reported by `manage.py check` (and at startup):
@@ -453,6 +511,8 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E008` | `inline_save_button = True` but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
 | `admin_inline_controls.E009` | An `inline_actions` entry is not a method of the inline, a callable or a built-in action. |
 | `admin_inline_controls.E010` | `inline_actions` is set but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
+| `admin_inline_controls.E011` | `inline_controls_selectors` is not a dict. |
+| `admin_inline_controls.E012` | An `inline_controls_selectors` key is unknown, or its value is not a selector or a non-empty list of selectors. |
 | `admin_inline_controls.E101` | `inline_pagination = "infinite"` on a nested_admin inline. |
 | `admin_inline_controls.E102` | `inline_save_button = True` on a nested_admin inline. |
 | `admin_inline_controls.E103` | `inline_actions` on a nested_admin inline. |
@@ -461,7 +521,9 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 
 After an inline is refreshed in place, or rows are appended, an
 `inline-controls:updated` event bubbles from the new content: hook your own
-widget initialization there. The admin's own inline machinery, autocomplete,
+widget initialization there. Before the toolbar and footer are placed, a
+cancelable `inline-controls:place` event bubbles from the controls'
+wrapper (see [Adapting to another admin markup](#adapting-to-another-admin-markup)). The admin's own inline machinery, autocomplete,
 date/time shortcuts and `filter_horizontal` widgets are re-initialized
 automatically.
 

@@ -20,6 +20,23 @@ const config = (overrides = {}) => ({
     ordering: [],
     nextUrl: null,
     messages: { sortRemove: "Remove", sortToggle: "Toggle", unsaved: "Sure?" },
+    // Mirrors DEFAULT_SELECTORS in controls.py.
+    selectors: {
+        container: [".inline-group fieldset"],
+        heading: ["h2"],
+        footer_parent: [":scope > details"],
+        table_head: [".inline-group table thead"],
+        column_header: ["th.column-{name}"],
+        row_label: [
+            ":scope > td.original > p",
+            ":scope > h3",
+            ":scope > td.original",
+        ],
+        tabular_rows: [
+            "{group} .tabular.inline-related tbody:first > tr.form-row",
+        ],
+        stacked_rows: ["{group} .inline-related"],
+    },
     ...overrides,
 });
 
@@ -219,7 +236,7 @@ describe("decorateHeaders / placeControls", () => {
 
     it("moves the toolbar under the heading and the footer into the fieldset", () => {
         const root = render();
-        api.placeControls(root);
+        api.placeControls(root, config());
 
         const fieldset = root.querySelector("fieldset");
         expect(fieldset.querySelector("h2").nextElementSibling.className).toBe(
@@ -343,5 +360,93 @@ describe("action checkboxes", () => {
         boxes[0].dispatchEvent(new Event("change", { bubbles: true }));
         expect(label.textContent).toBe("1 of 30 selected");
         expect(toggle.indeterminate).toBe(true);
+    });
+});
+
+describe("custom selectors", () => {
+    const themed = () => {
+        document.body.innerHTML = `
+            <div class="inline-controls" id="books-inline-controls">
+              <div class="inline-controls-toolbar"></div>
+              <section class="card" id="books-group">
+                <header class="card-title">Books</header>
+                <table class="grid"><thead><tr>
+                  <th data-col="title">Title</th>
+                </tr></thead></table>
+              </section>
+              <nav class="inline-controls-footer"></nav>
+            </div>`;
+        return document.getElementById("books-inline-controls");
+    };
+    const themedConfig = (overrides) =>
+        config({
+            ordering: [
+                {
+                    name: "title",
+                    direction: "",
+                    priority: 0,
+                    toggleUrl: "?o=title",
+                    removeUrl: "?",
+                },
+            ],
+            selectors: {
+                ...config().selectors,
+                container: [".card"],
+                heading: [".card-title"],
+                table_head: ["table.grid thead"],
+                column_header: ['th[data-col="{name}"]'],
+            },
+            ...overrides,
+        });
+
+    it("places the toolbar and footer in another structure", () => {
+        const root = themed();
+        api.placeControls(root, themedConfig());
+
+        const card = root.querySelector(".card");
+        expect(
+            card.querySelector(".card-title").nextElementSibling.className,
+        ).toBe("inline-controls-toolbar");
+        expect(card.lastElementChild.className).toBe("inline-controls-footer");
+    });
+
+    it("finds sortable headers with another selector", () => {
+        const root = themed();
+
+        expect(api.decorateHeaders(root, themedConfig())).toBe(true);
+        expect(
+            root.querySelector(
+                'th[data-col="title"] .inline-controls-sort-toggle',
+            ).textContent,
+        ).toBe("Title");
+    });
+
+    it("tries a key's selectors in order", () => {
+        const root = themed();
+        const found = api.query(
+            root,
+            themedConfig({
+                selectors: { container: [".missing", "section", ".card"] },
+            }),
+            "container",
+        );
+
+        expect(found.id).toBe("books-group");
+    });
+
+    it("lets a listener place the controls itself", () => {
+        const root = themed();
+        const handler = (event) => {
+            event.preventDefault();
+            document.body.prepend(event.detail.toolbar);
+        };
+        root.addEventListener("inline-controls:place", handler);
+        api.placeControls(root, themedConfig());
+        root.removeEventListener("inline-controls:place", handler);
+
+        expect(document.body.firstElementChild.className).toBe(
+            "inline-controls-toolbar",
+        );
+        expect(root.querySelector(".card .inline-controls-footer")).toBeNull();
     });
 });

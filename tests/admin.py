@@ -4,7 +4,10 @@ from demo.models import Author, Book
 from django import forms
 from django.contrib import admin
 
-from django_admin_inline_controls.mixins import InlineControlsMixin
+from django_admin_inline_controls.mixins import (
+    InlineControlsAdminMixin,
+    InlineControlsMixin,
+)
 
 site = admin.AdminSite(name="test_admin")
 
@@ -52,9 +55,36 @@ class PlainBookInline(InlineControlsMixin, admin.TabularInline):
     fields = ["title"]
 
 
+class ThemedBookInline(InlineControlsMixin, admin.TabularInline):
+    """A different inline markup, adapted to with inline_controls_selectors."""
+
+    model = Book
+    extra = 0
+    can_delete = False
+    fields = ["title", "pages"]
+    verbose_name_plural = "themed books"
+    template = "custom/themed_tabular.html"
+    inline_per_page = 5
+    inline_ordering_fields = ["pages"]
+    inline_actions = ["delete_selected"]
+    inline_controls_selectors = {
+        "container": ".card",
+        "heading": ".card-title",
+        "table_head": "table.grid thead",
+        "column_header": 'th[data-col="{name}"]',
+        "row_label": ":scope > td.row-name > .label",
+        "tabular_rows": "{group} table.grid tbody > tr.form-row",
+    }
+
+
 @admin.register(Author, site=site)
-class AuthorAdmin(admin.ModelAdmin):
-    inlines = [CustomFormBookInline, PlainBookInline, CustomTemplatesBookInline]
+class AuthorAdmin(InlineControlsAdminMixin, admin.ModelAdmin):
+    inlines = [
+        CustomFormBookInline,
+        PlainBookInline,
+        CustomTemplatesBookInline,
+        ThemedBookInline,
+    ]
 
 
 try:

@@ -21,6 +21,8 @@ OrderingFields: TypeAlias = Sequence[str] | Mapping[str, OrderingValue]
 Ordering: TypeAlias = list[tuple[str, bool]]
 #: What filtering returns: the bound filter form (if any) and the queryset.
 FilterResult: TypeAlias = tuple[Form | None, QuerySet]
+#: ``inline_controls_selectors``: CSS selector(s) per key, tried in order.
+Selectors: TypeAlias = Mapping[str, str | Sequence[str]]
 #: Actions available to a user, keyed by name.
 InlineActions: TypeAlias = "dict[str, InlineActionSpec]"
 
@@ -30,4 +32,5 @@ __all__ = [
     "Ordering",
     "OrderingFields",
     "OrderingValue",
+    "Selectors",
 ]

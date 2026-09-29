@@ -17,6 +17,26 @@
 
     const readConfig = (root) => JSON.parse(root.dataset.inlineControls);
 
+    /** The configured selectors for `key`, with {placeholders} filled in. */
+    function selectorsFor(config, key, values = {}) {
+        return []
+            .concat(config.selectors?.[key] ?? [])
+            .map((selector) =>
+                selector.replace(/\{(\w+)\}/g, (_, name) => values[name] ?? ""),
+            );
+    }
+
+    /** First element matching any of `key`'s selectors, in their order. */
+    function query(scope, config, key, values) {
+        for (const selector of selectorsFor(config, key, values)) {
+            const element = scope?.querySelector(selector);
+            if (element) {
+                return element;
+            }
+        }
+        return null;
+    }
+
     /** Point every `<prefix>-<n>` reference in `el`'s attributes at `index`. */
     function updateElementIndex(el, prefix, index) {
         const pattern = new RegExp(
@@ -102,19 +122,28 @@
     }
 
     /** Move the toolbar under the inline heading and the footer to its end. */
-    function placeControls(root) {
-        const fieldset = root.querySelector(".inline-group fieldset");
-        if (!fieldset) {
+    function placeControls(root, config = readConfig(root)) {
+        const toolbar = root.querySelector(":scope > .inline-controls-toolbar");
+        const footer = root.querySelector(":scope > .inline-controls-footer");
+        // Listeners can place them themselves and cancel the default.
+        const placing = new CustomEvent("inline-controls:place", {
+            bubbles: true,
+            cancelable: true,
+            detail: { toolbar, footer },
+        });
+        if (!root.dispatchEvent(placing)) {
             return;
         }
-        const toolbar = root.querySelector(":scope > .inline-controls-toolbar");
-        const heading = fieldset.querySelector("h2");
+        const container = query(root, config, "container");
+        if (!container) {
+            return;
+        }
+        const heading = query(container, config, "heading");
         if (toolbar && heading) {
             (heading.closest("summary") ?? heading).after(toolbar);
         }
-        const footer = root.querySelector(":scope > .inline-controls-footer");
         if (footer) {
-            (fieldset.querySelector(":scope > details") ?? fieldset).append(
+            (query(container, config, "footer_parent") ?? container).append(
                 footer,
             );
         }
@@ -125,13 +154,15 @@
      * sortable column got a header, so the toolbar links can be hidden.
      */
     function decorateHeaders(root, config) {
-        const thead = root.querySelector(".inline-group table thead");
+        const thead = query(root, config, "table_head");
         if (!thead || config.ordering.length === 0) {
             return false;
         }
         let all = true;
         for (const column of config.ordering) {
-            const th = thead.querySelector(`th.column-${column.name}`);
+            const th = query(thead, config, "column_header", {
+                name: column.name,
+            });
             if (!th) {
                 all = false;
                 continue;
@@ -172,18 +203,19 @@
     }
 
     /** Re-run the admin's inline and widget setup on freshly inserted HTML. */
-    function reinitAdmin(container) {
+    function reinitAdmin(container, config = readConfig(container)) {
         const $ = window.django?.jQuery;
         const group = container.matches(".js-inline-admin-formset")
             ? container
             : container.querySelector(".js-inline-admin-formset");
         if ($ && group && $.fn.tabularFormset) {
             const data = JSON.parse(group.dataset.inlineFormset);
+            const values = { group: `${data.name}-group` };
             if (group.dataset.inlineType === "tabular") {
-                const selector = `${data.name}-group .tabular.inline-related tbody:first > tr.form-row`;
+                const [selector] = selectorsFor(config, "tabular_rows", values);
                 $(selector).tabularFormset(selector, data.options);
             } else if (group.dataset.inlineType === "stacked") {
-                const selector = `${data.name}-group .inline-related`;
+                const [selector] = selectorsFor(config, "stacked_rows", values);
                 $(selector).stackedFormset(selector, data.options);
             }
         }
@@ -370,11 +402,7 @@
         checkbox.setAttribute("aria-label", config.messages.selectRow ?? "");
         // Next to the object's name: the label line of a tabular row (inside
         // the zero-width "original" cell) or the heading of a stacked one.
-        const label =
-            row.querySelector(":scope > td.original > p") ??
-            row.querySelector(":scope > h3") ??
-            row.querySelector(":scope > td.original");
-        (label ?? row).prepend(checkbox);
+        (query(row, config, "row_label") ?? row).prepend(checkbox);
     }
 
     function selectedPks(root) {
@@ -689,7 +717,7 @@
         };
         states.set(root, state);
 
-        placeControls(root);
+        placeControls(root, config);
         setupActions(root, state);
         if (decorateHeaders(root, config)) {
             const ordering = root.querySelector(".inline-controls-ordering");
@@ -807,6 +835,7 @@
         loadMore,
         navigate,
         placeControls,
+        query,
         reindexForm,
         runAction,
         saveInline,

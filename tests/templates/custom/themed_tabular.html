@@ -1,0 +1,33 @@
+{% comment %}A tabular inline with a different structure, as a theme might render it.{% endcomment %}
+<div class="js-inline-admin-formset inline-group themed-inline" id="{{ inline_admin_formset.formset.prefix }}-group" data-inline-type="tabular" data-inline-formset="{{ inline_admin_formset.inline_formset_data }}">
+  <section class="card">
+    {{ inline_admin_formset.formset.management_form }}
+    <header class="card-title">{{ inline_admin_formset.opts.verbose_name_plural|capfirst }}</header>
+    <table class="grid">
+      <thead>
+        <tr>
+          <th></th>
+          {% for field in inline_admin_formset.fields %}<th data-col="{{ field.name }}">{{ field.label|capfirst }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for inline_admin_form in inline_admin_formset %}
+          <tr class="form-row{% if inline_admin_form.original %} has_original{% endif %}{% if forloop.last and inline_admin_formset.has_add_permission %} empty-form{% endif %}" id="{{ inline_admin_formset.formset.prefix }}-{% if forloop.last and inline_admin_formset.has_add_permission %}empty{% else %}{{ forloop.counter0 }}{% endif %}">
+            <td class="row-name">
+              <span class="label">{{ inline_admin_form.original|default:"" }}</span>
+              {% if inline_admin_form.needs_explicit_pk_field %}{{ inline_admin_form.pk_field.field }}{% endif %}
+              {% if inline_admin_form.fk_field %}{{ inline_admin_form.fk_field.field }}{% endif %}
+            </td>
+            {% for fieldset in inline_admin_form %}
+              {% for line in fieldset %}
+                {% for field in line %}
+                  <td class="field-{{ field.field.name }}">{% if field.is_readonly %}{{ field.contents }}{% else %}{{ field.field }}{% endif %}</td>
+                {% endfor %}
+              {% endfor %}
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>

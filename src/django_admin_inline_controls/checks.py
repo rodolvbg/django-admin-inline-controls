@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from django.core import checks
 from django.core.exceptions import FieldDoesNotExist
 
-from django_admin_inline_controls.controls import INFINITE, PAGES
+from django_admin_inline_controls.controls import DEFAULT_SELECTORS, INFINITE, PAGES
 
 if TYPE_CHECKING:
     from django_admin_inline_controls.mixins import InlineControlsMixin
@@ -81,6 +81,27 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
                     f"'{name}.inline_ordering_fields' contains {column!r}; column "
                     "names must be strings without a leading '-' or commas.",
                     "admin_inline_controls.E007",
+                )
+
+    selectors: Any = inline.inline_controls_selectors
+    if not isinstance(selectors, Mapping):
+        error(
+            f"The value of '{name}.inline_controls_selectors' must be a dict.",
+            "admin_inline_controls.E011",
+        )
+    else:
+        for key, value in selectors.items():
+            values = [value] if isinstance(value, str) else value
+            if key not in DEFAULT_SELECTORS or not (
+                isinstance(values, list | tuple)
+                and values
+                and all(isinstance(v, str) and v for v in values)
+            ):
+                error(
+                    f"'{name}.inline_controls_selectors' has an invalid entry "
+                    f"{key!r}: keys must be one of {sorted(DEFAULT_SELECTORS)} "
+                    "and values a selector or a non-empty list of selectors.",
+                    "admin_inline_controls.E012",
                 )
 
     parent_admin = inline.admin_site._registry.get(inline.parent_model)

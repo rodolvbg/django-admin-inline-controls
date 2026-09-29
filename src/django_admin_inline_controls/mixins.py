@@ -31,6 +31,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 
 from django_admin_inline_controls.controls import (
+    DEFAULT_SELECTORS,
     INFINITE,
     PAGES,
     InlineControls,
@@ -40,6 +41,7 @@ from django_admin_inline_controls.types import (
     FilterResult,
     InlineActions,
     OrderingFields,
+    Selectors,
 )
 
 LOOKUP_LABELS = {
@@ -244,6 +246,10 @@ class InlineControlsMixin:
     #: names, callables, or ``"delete_selected"``. Requires
     #: ``InlineControlsAdminMixin`` on the parent ``ModelAdmin``.
     inline_actions: Sequence[str | Callable[..., Any]] = ()
+    #: CSS selectors the JS uses to find its way in the inline's markup,
+    #: merged over ``DEFAULT_SELECTORS``: set the keys that differ in your
+    #: theme or inline template.
+    inline_controls_selectors: Selectors = {}
     #: Wrapper template; it includes the inline's own ``template``, the
     #: toolbar and the footer. Each one can extend the library's and
     #: override its blocks.
@@ -274,6 +280,15 @@ class InlineControlsMixin:
 
     def get_inline_filter_fields(self, request: HttpRequest, obj: Any) -> Sequence[str]:
         return self.inline_filter_fields
+
+    def get_inline_controls_selectors(
+        self, request: HttpRequest, obj: Any
+    ) -> dict[str, list[str]]:
+        """``DEFAULT_SELECTORS`` with ``inline_controls_selectors`` applied."""
+        selectors = {key: list(value) for key, value in DEFAULT_SELECTORS.items()}
+        for key, value in self.inline_controls_selectors.items():
+            selectors[key] = [value] if isinstance(value, str) else list(value)
+        return selectors
 
     def get_inline_filter_formfield(self, lookup: str) -> forms.Field:
         """Form field used to filter by ``lookup``. Override to customize one."""

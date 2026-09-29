@@ -33,6 +33,29 @@ if TYPE_CHECKING:
 PAGES = "pages"
 INFINITE = "infinite"
 
+#: Where the JS finds things in the admin's inline markup. Override per inline
+#: with ``inline_controls_selectors`` for themes or inline templates with a
+#: different structure. Each value is one selector or a list tried in order;
+#: ``{name}`` (a column) and ``{group}`` (``#<prefix>-group``) are filled in.
+DEFAULT_SELECTORS: dict[str, list[str]] = {
+    # Element the toolbar and footer are moved into, inside the inline.
+    "container": [".inline-group fieldset"],
+    # Inside the container: the toolbar goes right after it (or its <summary>).
+    "heading": ["h2"],
+    # Inside the container: the footer is appended here, else to the container.
+    "footer_parent": [":scope > details"],
+    # Tabular header row holding the sortable column headers.
+    "table_head": [".inline-group table thead"],
+    # Header of a sortable column, inside the table head.
+    "column_header": ["th.column-{name}"],
+    # Inside a saved row: where its action checkbox goes.
+    "row_label": [":scope > td.original > p", ":scope > h3", ":scope > td.original"],
+    # jQuery selectors of the rows Django's inlines.js manages (re-run after
+    # an inline is refreshed in place).
+    "tabular_rows": ["{group} .tabular.inline-related tbody:first > tr.form-row"],
+    "stacked_rows": ["{group} .inline-related"],
+}
+
 
 @dataclass(frozen=True)
 class OrderingColumn:
@@ -121,6 +144,7 @@ class InlineControls:
         self.page: Page | None = None
         self.loaded_count: int | None = None
         self.pages_loaded = pages_loaded
+        self.selectors = inline.get_inline_controls_selectors(request, parent)
 
     # Query parameter names -------------------------------------------------
 
@@ -412,6 +436,7 @@ class InlineControls:
                     for action in self.actions
                 ],
                 "pkName": self.inline.model._meta.pk.name,
+                "selectors": self.selectors,
                 "loadedCount": self.loaded_count,
                 "totalCount": self.total_count,
                 "messages": {
