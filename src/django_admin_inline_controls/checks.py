@@ -83,16 +83,32 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
                     "admin_inline_controls.E007",
                 )
 
-    if inline.inline_save_button:
-        parent_admin = inline.admin_site._registry.get(inline.parent_model)
-        if parent_admin is not None and not isinstance(
-            parent_admin, InlineControlsAdminMixin
-        ):
+    parent_admin = inline.admin_site._registry.get(inline.parent_model)
+    missing_admin_mixin = parent_admin is not None and not isinstance(
+        parent_admin, InlineControlsAdminMixin
+    )
+    for option, error_id in (
+        ("inline_save_button", "admin_inline_controls.E008"),
+        ("inline_actions", "admin_inline_controls.E010"),
+    ):
+        if getattr(inline, option) and missing_admin_mixin:
             error(
-                f"'{name}.inline_save_button' requires "
+                f"'{name}.{option}' requires "
                 f"'{type(parent_admin).__qualname__}' to inherit from "
                 "'InlineControlsAdminMixin'.",
-                "admin_inline_controls.E008",
+                error_id,
+            )
+
+    for action in inline.inline_actions:
+        try:
+            _, func = inline._resolve_inline_action(action)
+        except AttributeError:
+            func = None
+        if not callable(func):
+            error(
+                f"'{name}.inline_actions' contains {action!r}, which is not a "
+                f"method of '{name}', a callable, or a built-in action.",
+                "admin_inline_controls.E009",
             )
 
     return errors

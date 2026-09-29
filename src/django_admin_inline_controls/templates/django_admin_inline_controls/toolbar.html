@@ -1,6 +1,23 @@
 {% load i18n %}
-{% if controls.filter_form or controls.ordering_columns %}
+{% if controls.has_toolbar %}
   <div class="inline-controls-toolbar">
+    {% if controls.actions %}
+      <div class="inline-controls-actions">
+        <label>
+          {% translate "Action:" %}
+          <select name="action" form="{{ controls.actions_form_id }}" data-inline-controls-action>
+            <option value="">---------</option>
+            {% for action in controls.actions %}
+              <option value="{{ action.name }}">{{ action.description }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="button" class="button" data-inline-controls-run title="{% translate 'Run the selected action' %}">{% translate "Go" %}</button>
+        <span class="inline-controls-selection" data-inline-controls-selection></span>
+        <a href="#" class="inline-controls-select-across" data-inline-controls-select-across hidden></a>
+        <span class="inline-controls-status" role="status" aria-live="polite"></span>
+      </div>
+    {% endif %}
     {% if controls.filter_form %}
       <div class="inline-controls-filters" role="search">
         {% for field in controls.filter_form %}

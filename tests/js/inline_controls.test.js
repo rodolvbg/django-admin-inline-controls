@@ -269,3 +269,79 @@ describe("inlineFormData", () => {
         ]);
     });
 });
+
+describe("action checkboxes", () => {
+    it("adds a checkbox per saved row and detaches it from the form", () => {
+        document.body.innerHTML = `
+            <form>
+              <div class="inline-controls" id="books-inline-controls">
+                <div class="inline-controls-toolbar"><div class="inline-controls-actions">
+                  <span data-inline-controls-selection></span>
+                  <a data-inline-controls-select-across hidden></a>
+                </div></div>
+                <div class="inline-group js-inline-admin-formset" id="books-group">
+                  <fieldset class="module"><h2>Books</h2><table>
+                    <thead><tr><th class="original"></th></tr></thead>
+                    <tbody>
+                      <tr id="books-0" class="form-row has_original"><td class="original"><p>Book 7</p><input type="hidden" name="books-0-id" value="7"></td></tr>
+                      <tr id="books-1" class="form-row has_original"><td class="original"><input type="hidden" name="books-1-id" value="9"></td></tr>
+                      <tr id="books-2" class="form-row"><td class="original"><input type="hidden" name="books-2-id" value=""></td></tr>
+                    </tbody>
+                  </table></fieldset>
+                </div>
+              </div>
+            </form>`;
+        const root = document.getElementById("books-inline-controls");
+        root.dataset.inlineControls = JSON.stringify(
+            config({
+                actionUrl: "/action/",
+                actionsFormId: "books-inline-controls-actions",
+                actions: [{ name: "go", confirmation: null }],
+                pkName: "id",
+                totalCount: 30,
+                messages: {
+                    ...config().messages,
+                    selected: "%(sel)s of %(cnt)s selected",
+                    selectAll: "Select all %(total)s",
+                    allSelected: "All %(total)s selected",
+                },
+            }),
+        );
+        api.setup(root);
+
+        const boxes = root.querySelectorAll(".inline-controls-select");
+        expect([...boxes].map((box) => box.value)).toEqual(["7", "9"]);
+        expect(boxes[0].getAttribute("form")).toBe(
+            "books-inline-controls-actions",
+        );
+        expect(boxes[0].form).toBeNull();
+        expect(boxes[0].parentElement.tagName).toBe("P");
+        expect(boxes[1].parentElement.tagName).toBe("TD");
+        expect(
+            root.querySelector(
+                ".inline-controls-actions > .inline-controls-select-all",
+            ),
+        ).not.toBeNull();
+        const label = root.querySelector("[data-inline-controls-selection]");
+        expect(label.textContent).toBe("0 of 30 selected");
+
+        const toggle = root.querySelector(".inline-controls-select-all");
+        toggle.checked = true;
+        toggle.dispatchEvent(new Event("change", { bubbles: true }));
+        expect(label.textContent).toBe("2 of 30 selected");
+        const across = root.querySelector(
+            "[data-inline-controls-select-across]",
+        );
+        expect(across.hidden).toBe(false);
+        expect(across.textContent).toBe("Select all 30");
+
+        across.click();
+        expect(label.textContent).toBe("All 30 selected");
+        expect(across.hidden).toBe(true);
+
+        boxes[0].checked = false;
+        boxes[0].dispatchEvent(new Event("change", { bubbles: true }));
+        expect(label.textContent).toBe("1 of 30 selected");
+        expect(toggle.indeterminate).toBe(true);
+    });
+});

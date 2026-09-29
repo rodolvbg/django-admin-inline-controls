@@ -23,6 +23,8 @@ without leaving the change form.
   never silently thrown away.
 - Optional **"Save books" button** that saves only that inline, without
   submitting (or reloading) the rest of the page.
+- **Actions** on the selected rows, like the changelist's: checkboxes,
+  "select all", an action menu and a built-in `delete_selected`.
 - Only depends on Django. No jQuery plugins, no htmx; works with
   `TabularInline` and `StackedInline`.
 
@@ -85,6 +87,7 @@ shareable and several inlines never clash.
 | `inline_filter_form` | `None` | Your own filter `forms.Form`. |
 | `inline_controls_ajax` | `True` | Refresh the inline in place instead of reloading the page. |
 | `inline_save_button` | `False` | Show a button that saves only this inline. See [Saving only the inline](#saving-only-the-inline). |
+| `inline_actions` | `()` | Actions for the selected rows. See [Inline actions](#inline-actions). |
 
 Only columns declared in `inline_ordering_fields` can be sorted: ordering
 by an arbitrary field from the URL would let anyone infer the values of
@@ -208,6 +211,95 @@ appears in the inline's footer, next to the pagination.
    everything.
 5. Not available on nested_admin inlines (`admin_inline_controls.E102`).
 
+### Inline actions
+
+Like `ModelAdmin.actions`, for the rows of one inline:
+
+```python
+from django.contrib import admin, messages
+from django_admin_inline_controls.actions import inline_action
+from django_admin_inline_controls.mixins import (
+    InlineControlsAdminMixin,
+    InlineControlsMixin,
+)
+
+
+class BookInline(InlineControlsMixin, admin.TabularInline):
+    model = Book
+    inline_per_page = 20
+    inline_actions = ["mark_published", "export_csv", "delete_selected"]
+
+    @inline_action(
+        permissions=["change"],
+        description="Mark selected %(verbose_name_plural)s as published",
+    )
+    def mark_published(self, request, queryset):
+        count = queryset.update(status=Book.Status.PUBLISHED)
+        self.message_user(request, f"{count} books published.", messages.SUCCESS)
+
+    @inline_action(description="Export selected %(verbose_name_plural)s to CSV")
+    def export_csv(self, request, queryset):
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="books.csv"'
+        ...
+        return response
+
+
+@admin.register(Author)
+class AuthorAdmin(InlineControlsAdminMixin, admin.ModelAdmin):
+    inlines = [BookInline]
+```
+
+![Inline actions: row checkboxes, the action menu and the selection count](docs/screenshots/actions.png)
+
+**How it works**
+
+- Every saved row gets a checkbox next to its name; the action bar at the
+  top of the inline has a "select all rows on this page" checkbox, the
+  action menu, **Go** and the "2 of 25 selected" count. When the whole
+  page is selected and there are more rows, **"Select all 25"** extends the
+  selection to every row matching the current filters, on every page.
+- The checkboxes and the menu are not part of the change form: they are
+  never submitted when the object is saved, and ticking them doesn't count
+  as an unsaved change.
+- **Go** posts only the action name and the selected primary keys. The
+  action runs on a queryset that is always restricted to children of the
+  object being edited (and to the current filters), so a tampered primary
+  key can't reach other rows.
+- If the inline has unsaved edits, you are asked first: the inline is
+  re-rendered after the action, so they would be lost.
+
+**Writing actions**
+
+- Same signature as changelist actions: `action(inline, request,
+  queryset)`. Entries of `inline_actions` can be method names, callables or
+  `"delete_selected"`. The parent object is `request.inline_controls_parent`.
+- `@inline_action` is `@admin.action` (`permissions`, `description`) plus
+  `confirmation`: a prompt shown before running. `description` and
+  `confirmation` may use `%(verbose_name)s` and `%(verbose_name_plural)s`;
+  `confirmation` also `%(count)s`, the number of rows it will run on.
+  Plain `@admin.action` functions work too.
+- `permissions=["change"]` checks the inline's `has_change_permission()`
+  (with the parent object); actions the user may not run are not offered,
+  and are refused if posted anyway.
+- Use `self.message_user()` as in a `ModelAdmin`: the messages are shown
+  next to the action menu.
+- Return `None` to re-render the inline (keeping the page, filters and
+  ordering; in infinite mode, the loaded rows), a file response (it is
+  downloaded and the page stays as is), or a redirect (followed). Any other
+  response replaces the page.
+- Actions don't record anything in the history by themselves, as in the
+  changelist. The built-in **`delete_selected`** deletes the rows one by
+  one (so `delete()` overrides and signals run), asks "Delete 3 selected
+  books? This cannot be undone.", records the deletions in the parent's
+  history and reports rows protected by `on_delete=PROTECT` instead of
+  failing.
+
+**Requirements:** like the save button, `InlineControlsAdminMixin` on the
+parent `ModelAdmin` (`admin_inline_controls.E010`), and the user needs view
+or change permission on the parent object. Not available on nested_admin
+inlines (`admin_inline_controls.E103`).
+
 ## Optional extras
 
 The core only depends on Django. Integrations with third-party packages are
@@ -252,7 +344,8 @@ class BookInline(NestedInlineControlsMixin, nested_admin.NestedTabularInline):
 
 nested_admin keeps its own client-side formset state, so with it filters,
 sorting and page links reload the page instead of swapping the inline, and
-neither infinite scroll nor the save-inline button is available.
+infinite scroll, the save-inline button and inline actions are not
+available.
 
 ## System checks
 
@@ -268,8 +361,11 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E006` | `inline_ordering_fields` is not a list, tuple or dict. |
 | `admin_inline_controls.E007` | An `inline_ordering_fields` column starts with `-` or contains a comma. |
 | `admin_inline_controls.E008` | `inline_save_button = True` but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
+| `admin_inline_controls.E009` | An `inline_actions` entry is not a method of the inline, a callable or a built-in action. |
+| `admin_inline_controls.E010` | `inline_actions` is set but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
 | `admin_inline_controls.E101` | `inline_pagination = "infinite"` on a nested_admin inline. |
 | `admin_inline_controls.E102` | `inline_save_button = True` on a nested_admin inline. |
+| `admin_inline_controls.E103` | `inline_actions` on a nested_admin inline. |
 
 ## JavaScript events
 

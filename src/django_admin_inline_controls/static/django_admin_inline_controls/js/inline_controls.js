@@ -279,8 +279,13 @@
         return data;
     }
 
-    function showStatus(root, status, message) {
-        const el = root.querySelector(".inline-controls-status");
+    function showStatus(
+        root,
+        status,
+        message,
+        scope = ".inline-controls-save",
+    ) {
+        const el = root.querySelector(`${scope} .inline-controls-status`);
         if (el) {
             el.className = `inline-controls-status inline-controls-status-${status}`;
             el.textContent = message;
@@ -329,6 +334,216 @@
             state.loading = false;
             root.classList.remove("inline-controls-loading");
             showStatus(root, "failed", config.messages.saveFailed);
+        }
+    }
+
+    const format = (template, values) =>
+        template.replace(/%\((\w+)\)s/g, (_, key) => values[key]);
+
+    /** Saved rows of the inline with their primary keys. */
+    function selectableRows(root, config) {
+        const group = root.querySelector(`[id="${config.prefix}-group"]`);
+        if (!group) {
+            return [];
+        }
+        return formRows(group, config.prefix)
+            .filter((row) => row.classList.contains("has_original"))
+            .map((row) => {
+                const index = row.id.slice(config.prefix.length + 1);
+                const input = row.querySelector(
+                    `[name="${config.prefix}-${index}-${config.pkName}"]`,
+                );
+                return { row, pk: input?.value };
+            })
+            .filter(({ pk }) => pk);
+    }
+
+    function addRowCheckbox(row, pk, config) {
+        if (row.querySelector(".inline-controls-select")) {
+            return;
+        }
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "inline-controls-select";
+        checkbox.value = pk;
+        checkbox.setAttribute("form", config.actionsFormId);
+        checkbox.setAttribute("aria-label", config.messages.selectRow ?? "");
+        // Next to the object's name: the label line of a tabular row (inside
+        // the zero-width "original" cell) or the heading of a stacked one.
+        const label =
+            row.querySelector(":scope > td.original > p") ??
+            row.querySelector(":scope > h3") ??
+            row.querySelector(":scope > td.original");
+        (label ?? row).prepend(checkbox);
+    }
+
+    function selectedPks(root) {
+        return [
+            ...root.querySelectorAll(".inline-controls-select:checked"),
+        ].map((checkbox) => checkbox.value);
+    }
+
+    function updateSelection(root, state) {
+        const { config } = state;
+        const boxes = [...root.querySelectorAll(".inline-controls-select")];
+        const checked = boxes.filter((box) => box.checked).length;
+        const total = config.totalCount ?? boxes.length;
+        const all = boxes.length > 0 && checked === boxes.length;
+        if (!all) {
+            state.selectAcross = false;
+        }
+        const toggle = root.querySelector(".inline-controls-select-all");
+        if (toggle) {
+            toggle.checked = all;
+            toggle.indeterminate = checked > 0 && !all;
+        }
+        const label = root.querySelector("[data-inline-controls-selection]");
+        if (label) {
+            label.textContent = state.selectAcross
+                ? format(config.messages.allSelected, { total })
+                : format(config.messages.selected, {
+                      sel: checked,
+                      cnt: total,
+                  });
+        }
+        const across = root.querySelector(
+            "[data-inline-controls-select-across]",
+        );
+        if (across) {
+            across.hidden = !all || state.selectAcross || total <= boxes.length;
+            across.textContent = format(config.messages.selectAll, { total });
+        }
+    }
+
+    function setupActions(root, state) {
+        const { config } = state;
+        if (!config.actionUrl) {
+            return;
+        }
+        for (const { row, pk } of selectableRows(root, config)) {
+            addRowCheckbox(row, pk, config);
+        }
+        const toggle = document.createElement("input");
+        toggle.type = "checkbox";
+        toggle.className = "inline-controls-select-all";
+        toggle.setAttribute("form", config.actionsFormId);
+        toggle.setAttribute("aria-label", config.messages.selectAllRows ?? "");
+        root.querySelector(".inline-controls-actions")?.prepend(toggle);
+        updateSelection(root, state);
+    }
+
+    async function runAction(root) {
+        const state = states.get(root);
+        const { config } = state;
+        const select = root.querySelector("[data-inline-controls-action]");
+        const group = document.getElementById(`${config.prefix}-group`);
+        const form = group?.closest("form");
+        if (state.loading || !config.actionUrl || !select || !form) {
+            return;
+        }
+        const scope = ".inline-controls-actions";
+        const action = config.actions.find(
+            (item) => item.name === select.value,
+        );
+        const pks = selectedPks(root);
+        if (!action) {
+            showStatus(root, "error", config.messages.noAction, scope);
+            return;
+        }
+        if (pks.length === 0 && !state.selectAcross) {
+            showStatus(root, "error", config.messages.noSelection, scope);
+            return;
+        }
+        const count = state.selectAcross
+            ? (config.totalCount ?? pks.length)
+            : pks.length;
+        if (
+            action.confirmation &&
+            !window.confirm(format(action.confirmation, { count }))
+        ) {
+            return;
+        }
+        if (state.dirty && !window.confirm(config.messages.unsaved)) {
+            return;
+        }
+        const data = new FormData();
+        const csrf = form.querySelector("[name=csrfmiddlewaretoken]");
+        if (csrf) {
+            data.append(csrf.name, csrf.value);
+        }
+        data.append("action", action.name);
+        for (const pk of pks) {
+            data.append("_selected_action", pk);
+        }
+        data.append("select_across", state.selectAcross ? "1" : "0");
+        data.append(
+            "_inline_controls_loaded",
+            String(selectableRows(root, config).length),
+        );
+        state.loading = true;
+        root.classList.add("inline-controls-loading");
+        const target = new URL(
+            config.actionUrl + window.location.search,
+            window.location.href,
+        ).toString();
+        try {
+            const response = await fetch(target, {
+                method: "POST",
+                body: data,
+                credentials: "same-origin",
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const disposition =
+                response.headers.get("Content-Disposition") ?? "";
+            if (disposition.includes("attachment")) {
+                const blob = await response.blob();
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download =
+                    disposition.match(/filename="?([^";]+)"?/)?.[1] ??
+                    "download";
+                document.body.append(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(link.href);
+                state.loading = false;
+                root.classList.remove("inline-controls-loading");
+                return;
+            }
+            if (response.redirected) {
+                window.location.assign(response.url);
+                return;
+            }
+            const text = await response.text();
+            const doc = new DOMParser().parseFromString(text, "text/html");
+            const result = doc.getElementById(
+                `${config.prefix}-inline-controls-response`,
+            );
+            const fresh = doc.getElementById(root.id);
+            if (!result || !fresh) {
+                // Any other page the action returned (e.g. an intermediate
+                // step) replaces this one.
+                document.open();
+                document.write(text);
+                document.close();
+                return;
+            }
+            const node = swapInline(root, fresh);
+            setup(node);
+            reinitAdmin(node);
+            showStatus(
+                node,
+                result.dataset.status,
+                result.dataset.message,
+                scope,
+            );
+        } catch {
+            state.loading = false;
+            root.classList.remove("inline-controls-loading");
+            showStatus(root, "failed", config.messages.actionFailed, scope);
         }
     }
 
@@ -443,6 +658,12 @@
                     more.remove();
                 }
             }
+            if (state.config.actionUrl) {
+                for (const { row, pk } of selectableRows(root, state.config)) {
+                    addRowCheckbox(row, pk, state.config);
+                }
+                updateSelection(root, state);
+            }
             for (const node of inserted) {
                 initWidgets(node);
             }
@@ -459,10 +680,17 @@
             return;
         }
         const config = readConfig(root);
-        const state = { config, dirty: false, loading: false, observer: null };
+        const state = {
+            config,
+            dirty: false,
+            loading: false,
+            observer: null,
+            selectAcross: false,
+        };
         states.set(root, state);
 
         placeControls(root);
+        setupActions(root, state);
         if (decorateHeaders(root, config)) {
             const ordering = root.querySelector(".inline-controls-ordering");
             if (ordering) {
@@ -492,6 +720,20 @@
             } else if (event.target.closest("[data-inline-controls-save]")) {
                 event.preventDefault();
                 saveInline(root);
+            } else if (event.target.closest("[data-inline-controls-run]")) {
+                event.preventDefault();
+                runAction(root);
+            } else if (
+                event.target.closest("[data-inline-controls-select-across]")
+            ) {
+                event.preventDefault();
+                for (const box of root.querySelectorAll(
+                    ".inline-controls-select",
+                )) {
+                    box.checked = true;
+                }
+                state.selectAcross = true;
+                updateSelection(root, state);
             }
         });
         root.addEventListener("keydown", (event) => {
@@ -500,7 +742,24 @@
                 navigate(root, filterUrl(state.config, false));
             }
         });
+        const isActionWidget = (el) =>
+            el.getAttribute?.("form") === config.actionsFormId;
         const markDirty = (event) => {
+            if (
+                event.target.classList?.contains("inline-controls-select-all")
+            ) {
+                for (const box of root.querySelectorAll(
+                    ".inline-controls-select",
+                )) {
+                    box.checked = event.target.checked;
+                }
+            }
+            if (isActionWidget(event.target)) {
+                if (event.type === "change") {
+                    updateSelection(root, state);
+                }
+                return;
+            }
             if (!isFilterWidget(event.target)) {
                 state.dirty = true;
             }
@@ -549,6 +808,7 @@
         navigate,
         placeControls,
         reindexForm,
+        runAction,
         saveInline,
         setup,
         updateElementIndex,

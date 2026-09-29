@@ -1,6 +1,10 @@
-from django.contrib import admin
-from django.db.models.functions import Lower
+import csv
 
+from django.contrib import admin, messages
+from django.db.models.functions import Lower
+from django.http import HttpResponse
+
+from django_admin_inline_controls.actions import inline_action
 from django_admin_inline_controls.mixins import (
     InlineControlsAdminMixin,
     InlineControlsMixin,
@@ -26,6 +30,25 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
         "published__gte",
     ]
     inline_save_button = True
+    inline_actions = ["mark_published", "export_csv", "delete_selected"]
+
+    @inline_action(
+        permissions=["change"],
+        description="Mark selected %(verbose_name_plural)s as published",
+    )
+    def mark_published(self, request, queryset):
+        count = queryset.update(status=Book.Status.PUBLISHED)
+        self.message_user(request, f"{count} books published.", messages.SUCCESS)
+
+    @inline_action(description="Export selected %(verbose_name_plural)s to CSV")
+    def export_csv(self, request, queryset):
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="books.csv"'
+        writer = csv.writer(response)
+        writer.writerow(["title", "status", "published", "pages"])
+        for book in queryset:
+            writer.writerow([book.title, book.status, book.published, book.pages])
+        return response
 
 
 class ArticleInline(InlineControlsMixin, admin.TabularInline):
@@ -36,6 +59,7 @@ class ArticleInline(InlineControlsMixin, admin.TabularInline):
     inline_pagination = "infinite"
     inline_ordering_fields = ["title", "words"]
     inline_save_button = True
+    inline_actions = ["delete_selected"]
 
 
 class BookStackedInline(InlineControlsMixin, admin.StackedInline):

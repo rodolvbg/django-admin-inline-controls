@@ -194,9 +194,11 @@ def test_save_only_the_inline(change_page: Page, author):
     page.fill("input[name='articles-0-title']", "Other inline not saved")
     page.click("#books-inline-controls [data-inline-controls-save]")
 
-    expect(page.locator("#books-inline-controls .inline-controls-status")).to_have_text(
-        "Saved."
-    )
+    expect(
+        page.locator(
+            "#books-inline-controls .inline-controls-save .inline-controls-status"
+        )
+    ).to_have_text("Saved.")
     expect(page.locator("#books-group .inline-controls-current")).to_have_text("2")
     assert_not_reloaded(page)
     # Other unsaved edits on the page are left alone.
@@ -219,9 +221,11 @@ def test_save_inline_shows_errors(change_page: Page, author):
     page.fill("input[name='books-1-pages']", "-1")
     page.click("#books-inline-controls [data-inline-controls-save]")
 
-    expect(page.locator("#books-inline-controls .inline-controls-status")).to_have_text(
-        "Please correct the errors below."
-    )
+    expect(
+        page.locator(
+            "#books-inline-controls .inline-controls-save .inline-controls-status"
+        )
+    ).to_have_text("Please correct the errors below.")
     expect(page.locator("#books-group .errorlist")).to_have_count(1)
     # The submitted values are kept, so they can be fixed and saved again.
     assert page.input_value("input[name='books-0-title']") == "Not saved"
@@ -229,9 +233,11 @@ def test_save_inline_shows_errors(change_page: Page, author):
 
     page.fill("input[name='books-1-pages']", "5")
     page.click("#books-inline-controls [data-inline-controls-save]")
-    expect(page.locator("#books-inline-controls .inline-controls-status")).to_have_text(
-        "Saved."
-    )
+    expect(
+        page.locator(
+            "#books-inline-controls .inline-controls-save .inline-controls-status"
+        )
+    ).to_have_text("Saved.")
     assert Book.objects.filter(title="Not saved").exists()
 
 
@@ -245,7 +251,103 @@ def test_save_infinite_inline_after_loading_more(change_page: Page, author):
     page.click("#articles-inline-controls [data-inline-controls-save]")
 
     expect(
-        page.locator("#articles-inline-controls .inline-controls-status")
+        page.locator(
+            "#articles-inline-controls .inline-controls-save .inline-controls-status"
+        )
     ).to_have_text("Saved.")
     expect(saved_rows(page, "articles")).to_have_count(20)
     assert Article.objects.get(title="From page two").words == 19
+
+
+def test_inline_action_on_selected_rows(change_page: Page, author):
+    page = change_page
+    boxes = page.locator("#books-group .inline-controls-select")
+    expect(boxes).to_have_count(10)
+    boxes.nth(1).check()
+    boxes.nth(3).check()
+    selection = page.locator("#books-inline-controls [data-inline-controls-selection]")
+    expect(selection).to_have_text("2 of 25 selected")
+
+    page.select_option(
+        "#books-inline-controls [data-inline-controls-action]", "mark_published"
+    )
+    page.click("#books-inline-controls [data-inline-controls-run]")
+
+    status = page.locator(
+        "#books-inline-controls .inline-controls-actions .inline-controls-status"
+    )
+    expect(status).to_have_text("2 books published.")
+    assert_not_reloaded(page)
+    assert set(
+        Book.objects.filter(author=author, status="published").values_list(
+            "title", flat=True
+        )
+    ) >= {"Book 02", "Book 04"}
+    expect(selection).to_have_text("0 of 25 selected")
+
+
+def test_inline_action_select_across_with_confirmation(change_page: Page, author):
+    page = change_page
+    page.click("#books-inline-controls .inline-controls-select-all")
+    across = page.locator("#books-inline-controls [data-inline-controls-select-across]")
+    expect(across).to_have_text("Select all 25")
+    across.click()
+    expect(
+        page.locator("#books-inline-controls [data-inline-controls-selection]")
+    ).to_have_text("All 25 selected")
+
+    page.select_option(
+        "#books-inline-controls [data-inline-controls-action]", "delete_selected"
+    )
+    dialogs = []
+    page.once(
+        "dialog", lambda dialog: (dialogs.append(dialog.message), dialog.dismiss())
+    )
+    page.click("#books-inline-controls [data-inline-controls-run]")
+    page.wait_for_timeout(200)
+    assert dialogs == ["Delete 25 selected books? This cannot be undone."]
+    assert Book.objects.filter(author=author).count() == 25
+
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click("#books-inline-controls [data-inline-controls-run]")
+    status = page.locator(
+        "#books-inline-controls .inline-controls-actions .inline-controls-status"
+    )
+    expect(status).to_have_text("Deleted 25 books.")
+    assert Book.objects.filter(author=author).count() == 0
+
+
+def test_inline_action_download(change_page: Page):
+    page = change_page
+    page.locator("#books-group .inline-controls-select").nth(0).check()
+    page.select_option(
+        "#books-inline-controls [data-inline-controls-action]", "export_csv"
+    )
+    with page.expect_download() as download:
+        page.click("#books-inline-controls [data-inline-controls-run]")
+
+    assert download.value.suggested_filename == "books.csv"
+    assert_not_reloaded(page)
+
+
+def test_inline_action_requires_selection(change_page: Page):
+    page = change_page
+    page.select_option(
+        "#books-inline-controls [data-inline-controls-action]", "mark_published"
+    )
+    page.click("#books-inline-controls [data-inline-controls-run]")
+
+    status = page.locator(
+        "#books-inline-controls .inline-controls-actions .inline-controls-status"
+    )
+    expect(status).to_contain_text("Items must be selected")
+
+
+def test_rows_loaded_later_get_checkboxes(change_page: Page):
+    page = change_page
+    page.evaluate(
+        "document.querySelector("
+        "'#articles-inline-controls [data-inline-controls-more]').scrollIntoView()"
+    )
+    expect(saved_rows(page, "articles")).to_have_count(20)
+    expect(page.locator("#articles-group .inline-controls-select")).to_have_count(20)

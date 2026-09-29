@@ -167,6 +167,9 @@ class InlineControls:
                 field.widget.attrs["form"] = self.filter_form_id
 
         queryset = queryset.order_by(*self._order_by(queryset))
+        #: Filtered and ordered, before pagination: what actions run on
+        #: when "select all" is used.
+        self.filtered_queryset = queryset
 
         if self.per_page:
             self.paginator = Paginator(queryset, self.per_page)
@@ -323,13 +326,10 @@ class InlineControls:
 
     # Saving ----------------------------------------------------------------
 
-    @cached_property
-    def save_url(self) -> str | None:
-        """Endpoint that saves only this inline, if enabled and routed."""
-        if not self.inline.inline_save_button:
-            return None
+    def _endpoint(self, kind: str) -> str | None:
+        """URL of an ``InlineControlsAdminMixin`` endpoint, if routed."""
         opts = self.inline.parent_model._meta
-        name = f"{opts.app_label}_{opts.model_name}_inline_controls_save"
+        name = f"{opts.app_label}_{opts.model_name}_inline_controls_{kind}"
         try:
             return reverse(
                 f"{self.inline.admin_site.name}:{name}",
@@ -338,11 +338,37 @@ class InlineControls:
         except NoReverseMatch:
             return None
 
+    @cached_property
+    def save_url(self) -> str | None:
+        """Endpoint that saves only this inline, if enabled and routed."""
+        return self._endpoint("save") if self.inline.inline_save_button else None
+
+    # Actions ---------------------------------------------------------------
+
+    @cached_property
+    def actions(self) -> list[Any]:
+        if not self.inline.inline_actions or self._endpoint("action") is None:
+            return []
+        return list(self.inline.get_inline_actions(self.request, self.parent).values())
+
+    @property
+    def action_url(self) -> str | None:
+        return self._endpoint("action") if self.actions else None
+
+    @property
+    def actions_form_id(self) -> str:
+        """Detached form id for the action select and row checkboxes."""
+        return f"{self.prefix}-inline-controls-actions"
+
     @property
     def save_label(self) -> str:
         return gettext("Save %(name)s") % {
             "name": self.inline.model._meta.verbose_name_plural
         }
+
+    @property
+    def has_toolbar(self) -> bool:
+        return bool(self.filter_form or self.ordering_columns or self.actions)
 
     @property
     def has_footer(self) -> bool:
@@ -376,6 +402,16 @@ class InlineControls:
                 "ordering": [column.as_json() for column in self.ordering_columns],
                 "nextUrl": self.next_page_url if self.mode == INFINITE else None,
                 "saveUrl": self.save_url,
+                "actionUrl": self.action_url,
+                "actionsFormId": self.actions_form_id,
+                "actions": [
+                    {
+                        "name": action.name,
+                        "confirmation": action.confirmation,
+                    }
+                    for action in self.actions
+                ],
+                "pkName": self.inline.model._meta.pk.name,
                 "loadedCount": self.loaded_count,
                 "totalCount": self.total_count,
                 "messages": {
@@ -388,6 +424,19 @@ class InlineControls:
                     "saveFailed": gettext(
                         "The changes could not be saved. Please try again."
                     ),
+                    "actionFailed": gettext(
+                        "The action could not be run. Please try again."
+                    ),
+                    "noAction": gettext("No action selected."),
+                    "noSelection": gettext(
+                        "Items must be selected in order to perform actions on "
+                        "them. No items have been changed."
+                    ),
+                    "selected": gettext("%(sel)s of %(cnt)s selected"),
+                    "selectAll": gettext("Select all %(total)s"),
+                    "allSelected": gettext("All %(total)s selected"),
+                    "selectRow": gettext("Select this row"),
+                    "selectAllRows": gettext("Select all rows on this page"),
                 },
             }
         )

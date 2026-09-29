@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Saving rows loaded across several pages.
 - `inline_save_button` with `InlineControlsAdminMixin`: save a single
   inline without submitting or reloading the rest of the page.
+- `inline_actions`: changelist-style actions on the selected rows, with
+  "select all" across pages, the `@inline_action` decorator (confirmation
+  prompts) and a built-in `delete_selected`.
 - System checks for every option.
 - `contrib.filters` (`[filters]` extra): django-filter `FilterSet` support.
 - `contrib.nested` (`[nested]` extra): django-nested-admin support.

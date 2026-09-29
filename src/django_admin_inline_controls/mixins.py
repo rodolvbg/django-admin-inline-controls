@@ -3,19 +3,29 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from django import forms
-from django.contrib.admin.utils import lookup_spawns_duplicates
-from django.core.exceptions import FieldDoesNotExist, PermissionDenied
+from django.contrib import messages
+from django.contrib.admin.utils import lookup_spawns_duplicates, model_format_dict
+from django.core.exceptions import FieldDoesNotExist, PermissionDenied, ValidationError
 from django.db import models, router, transaction
 from django.db.models import QuerySet
 from django.db.models.constants import LOOKUP_SEP
 from django.forms import BaseInlineFormSet, Form
-from django.http import Http404, HttpRequest, HttpResponse, QueryDict
+from django.http import (
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponseBase,
+    QueryDict,
+)
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path
+from django.utils.text import capfirst
 from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
@@ -134,6 +144,19 @@ def build_filter_formfield(
     return formfield or forms.CharField(**options)
 
 
+class _KeepMissing(dict):
+    def __missing__(self, key: str) -> str:
+        return f"%({key})s"
+
+
+@dataclass(frozen=True)
+class InlineActionSpec:
+    name: str
+    function: Callable[..., Any]
+    description: str
+    confirmation: str | None
+
+
 class InlineControlsFormSetMixin:
     """Mixed into the inline's formset class by ``InlineControlsMixin``."""
 
@@ -213,6 +236,10 @@ class InlineControlsMixin:
     #: Show a button that saves only this inline. Requires
     #: ``InlineControlsAdminMixin`` on the parent ``ModelAdmin``.
     inline_save_button: bool = False
+    #: Actions for the selected rows, like ``ModelAdmin.actions``: method
+    #: names, callables, or ``"delete_selected"``. Requires
+    #: ``InlineControlsAdminMixin`` on the parent ``ModelAdmin``.
+    inline_actions: Sequence[str | Callable[..., Any]] = ()
     #: Wrapper template; it includes the inline's own ``template``.
     inline_controls_template = "django_admin_inline_controls/inline.html"
 
@@ -309,6 +336,65 @@ class InlineControlsMixin:
             queryset = queryset.distinct()
         return queryset
 
+    # Actions ---------------------------------------------------------------
+
+    def _resolve_inline_action(
+        self, action: str | Callable[..., Any]
+    ) -> tuple[str, Callable[..., Any]]:
+        from django_admin_inline_controls.actions import BUILTIN_ACTIONS
+
+        if callable(action):
+            return action.__name__, action
+        if not isinstance(action, str):
+            raise AttributeError(action)
+        if hasattr(type(self), action):
+            return action, getattr(type(self), action)
+        if action in BUILTIN_ACTIONS:
+            return action, BUILTIN_ACTIONS[action]
+        raise AttributeError(action)
+
+    def get_inline_actions(
+        self, request: HttpRequest, obj: Any
+    ) -> dict[str, InlineActionSpec]:
+        """Actions available to this user, keyed by name."""
+        actions: dict[str, InlineActionSpec] = {}
+        # Unknown placeholders (``%(count)s``) are left for the JS to fill.
+        names = _KeepMissing(model_format_dict(self.model._meta))
+        for action in self.inline_actions:
+            name, func = self._resolve_inline_action(action)
+            permissions = getattr(func, "allowed_permissions", ())
+            if not all(
+                getattr(self, f"has_{permission}_permission")(request, obj)
+                for permission in permissions
+            ):
+                continue
+            description = getattr(
+                func, "short_description", capfirst(name.replace("_", " "))
+            )
+            confirmation = getattr(func, "confirmation", None)
+            actions[name] = InlineActionSpec(
+                name=name,
+                function=func,
+                description=str(description) % names,
+                confirmation=None
+                if confirmation is None
+                else str(confirmation) % names,
+            )
+        return actions
+
+    def message_user(
+        self,
+        request: HttpRequest,
+        message: str,
+        level: int = messages.INFO,
+        extra_tags: str = "",
+        fail_silently: bool = False,
+    ) -> None:
+        """Like ``ModelAdmin.message_user()``, for use in inline actions."""
+        messages.add_message(
+            request, level, message, extra_tags=extra_tags, fail_silently=fail_silently
+        )
+
     # InlineModelAdmin ------------------------------------------------------
 
     def get_formset(
@@ -339,10 +425,10 @@ class InlineControlsMixin:
 
 
 class InlineControlsAdminMixin:
-    """Parent ``ModelAdmin`` side of ``InlineControlsMixin.inline_save_button``.
+    """Parent ``ModelAdmin`` side of ``inline_save_button`` and ``inline_actions``.
 
-    Adds an endpoint that validates and saves a single inline formset, then
-    returns it re-rendered::
+    Adds the endpoints that save a single inline and run inline actions,
+    both returning the inline re-rendered::
 
         @admin.register(Author)
         class AuthorAdmin(InlineControlsAdminMixin, admin.ModelAdmin):
@@ -350,7 +436,7 @@ class InlineControlsAdminMixin:
     """
 
     inline_controls_response_template = (
-        "django_admin_inline_controls/save_response.html"
+        "django_admin_inline_controls/inline_response.html"
     )
 
     # Provided by ModelAdmin.
@@ -360,17 +446,27 @@ class InlineControlsAdminMixin:
 
     def get_urls(self) -> list[URLPattern]:
         opts = self.model._meta
+        name = f"{opts.app_label}_{opts.model_name}_inline_controls"
         return [
             path(
                 "<path:object_id>/inline-controls/<str:prefix>/save/",
                 self.admin_site.admin_view(self.inline_controls_save_view),
-                name=f"{opts.app_label}_{opts.model_name}_inline_controls_save",
+                name=f"{name}_save",
+            ),
+            path(
+                "<path:object_id>/inline-controls/<str:prefix>/action/",
+                self.admin_site.admin_view(self.inline_controls_action_view),
+                name=f"{name}_action",
             ),
             *super().get_urls(),  # type: ignore[misc]
         ]
 
     def _inline_controls_formset_class(
-        self, request: HttpRequest, obj: models.Model, prefix: str
+        self,
+        request: HttpRequest,
+        obj: models.Model,
+        prefix: str,
+        enabled: Callable[[Any], bool],
     ) -> tuple[Any, InlineControlsMixin]:
         """Find the formset class and inline with ``prefix``, like the change
         view does (a repeated default prefix gets ``-2``, ``-3``...)."""
@@ -384,10 +480,69 @@ class InlineControlsAdminMixin:
                 else (f"{default}-{seen[default]}")
             )
             if current == prefix:
-                if not getattr(inline, "inline_save_button", False):
+                if not enabled(inline):
                     break
                 return formset_class, inline
-        raise Http404(f"No inline with a save button and prefix {prefix!r}.")
+        raise Http404(f"No such inline: {prefix!r}.")
+
+    def _inline_controls_object(self, request: HttpRequest, object_id: str) -> Any:
+        request.current_app = self.admin_site.name
+        obj = self.get_object(request, object_id)  # type: ignore[attr-defined]
+        if obj is None:
+            raise Http404
+        return obj
+
+    def _inline_controls_response(
+        self,
+        request: HttpRequest,
+        obj: Any,
+        inline: InlineControlsMixin,
+        formset: Any,
+        prefix: str,
+        status: str,
+        message: str,
+    ) -> HttpResponse:
+        inline_admin_formsets = self.get_inline_formsets(  # type: ignore[attr-defined]
+            request, [formset], [inline], obj
+        )
+        return TemplateResponse(
+            request,
+            self.inline_controls_response_template,
+            {
+                "inline_admin_formsets": inline_admin_formsets,
+                "prefix": prefix,
+                "status": status,
+                "message": message,
+                "opts": self.opts,
+                "original": obj,
+                "change": True,
+                "is_popup": False,
+            },
+        )
+
+    def _inline_controls_fresh_formset(
+        self,
+        request: HttpRequest,
+        obj: Any,
+        inline: InlineControlsMixin,
+        formset_class: Any,
+        prefix: str,
+        loaded: int,
+    ) -> Any:
+        """The inline as stored now; in infinite mode, as many pages as were
+        loaded (``loaded`` rows)."""
+        per_page = inline.get_inline_per_page(request, obj)
+        if inline.inline_pagination == INFINITE and per_page:
+            formset_class.inline_controls_pages_loaded = max(
+                1, math.ceil(loaded / per_page)
+            )
+        return formset_class(
+            instance=obj,
+            prefix=prefix,
+            queryset=inline.get_queryset(request),  # type: ignore[attr-defined]
+        )
+
+    # Save ------------------------------------------------------------------
 
     def inline_controls_save_view(
         self, request: HttpRequest, object_id: str, prefix: str
@@ -397,14 +552,11 @@ class InlineControlsAdminMixin:
     def _inline_controls_save(
         self, request: HttpRequest, object_id: str, prefix: str
     ) -> HttpResponse:
-        request.current_app = self.admin_site.name
-        obj = self.get_object(request, object_id)  # type: ignore[attr-defined]
-        if obj is None:
-            raise Http404
+        obj = self._inline_controls_object(request, object_id)
         if not self.has_change_permission(request, obj):  # type: ignore[attr-defined]
             raise PermissionDenied
         formset_class, inline = self._inline_controls_formset_class(
-            request, obj, prefix
+            request, obj, prefix, lambda inline: inline.inline_save_button
         )
         if not (
             inline.has_change_permission(request, obj)  # type: ignore[attr-defined]
@@ -430,49 +582,101 @@ class InlineControlsAdminMixin:
         form = self.get_form(request, obj, change=True)(instance=obj)  # type: ignore[attr-defined]
         form.changed_data = []
 
-        if formset.is_valid():
-            with transaction.atomic(using=router.db_for_write(self.model)):
-                self.save_formset(request, form, formset, change=True)  # type: ignore[attr-defined]
-                message = self.construct_change_message(request, form, [formset])  # type: ignore[attr-defined]
-                if message:
-                    self.log_change(request, obj, message)  # type: ignore[attr-defined]
-            status, text = "saved", gettext("Saved.")
-            per_page = inline.get_inline_per_page(request, obj)
-            if inline.inline_pagination == INFINITE and per_page:
-                # Show as many pages as were loaded, re-queried after saving.
-                formset_class.inline_controls_pages_loaded = max(
-                    1, math.ceil(formset.initial_form_count() / per_page)
-                )
-            formset = formset_class(
-                instance=obj,
-                prefix=prefix,
-                queryset=inline.get_queryset(request),  # type: ignore[attr-defined]
+        if not formset.is_valid():
+            return self._inline_controls_response(
+                request,
+                obj,
+                inline,
+                formset,
+                prefix,
+                "invalid",
+                gettext("Please correct the errors below."),
+            )
+        with transaction.atomic(using=router.db_for_write(self.model)):
+            self.save_formset(request, form, formset, change=True)  # type: ignore[attr-defined]
+            message = self.construct_change_message(request, form, [formset])  # type: ignore[attr-defined]
+            if message:
+                self.log_change(request, obj, message)  # type: ignore[attr-defined]
+        fresh = self._inline_controls_fresh_formset(
+            request, obj, inline, formset_class, prefix, formset.initial_form_count()
+        )
+        return self._inline_controls_response(
+            request, obj, inline, fresh, prefix, "saved", gettext("Saved.")
+        )
+
+    # Actions ---------------------------------------------------------------
+
+    def inline_controls_action_view(
+        self, request: HttpRequest, object_id: str, prefix: str
+    ) -> HttpResponseBase:
+        return require_POST(self._inline_controls_action)(request, object_id, prefix)
+
+    def _inline_controls_action(
+        self, request: HttpRequest, object_id: str, prefix: str
+    ) -> HttpResponseBase:
+        obj = self._inline_controls_object(request, object_id)
+        if not self.has_view_or_change_permission(request, obj):  # type: ignore[attr-defined]
+            raise PermissionDenied
+        formset_class, inline = self._inline_controls_formset_class(
+            request, obj, prefix, lambda inline: bool(inline.inline_actions)
+        )
+        actions = inline.get_inline_actions(request, obj)
+        action = actions.get(request.POST.get("action", ""))
+        if action is None:
+            return HttpResponseBadRequest("Unknown or forbidden action.")
+
+        try:
+            loaded = int(request.POST.get("_inline_controls_loaded") or 0)
+        except ValueError:
+            loaded = 0
+        # The current filters come from the query string, as for the page.
+        formset = formset_class(
+            instance=obj,
+            prefix=prefix,
+            queryset=inline.get_queryset(request),  # type: ignore[attr-defined]
+        )
+        formset.get_queryset()
+        queryset = formset.inline_controls.filtered_queryset
+        if request.POST.get("select_across") != "1":
+            pk_field = queryset.model._meta.pk
+            pks = []
+            for raw in request.POST.getlist("_selected_action"):
+                try:
+                    pks.append(pk_field.to_python(raw))
+                except ValidationError:
+                    continue
+            queryset = queryset.filter(pk__in=pks)
+
+        if not queryset.exists():
+            status, text = (
+                "error",
+                gettext(
+                    "Items must be selected in order to perform actions on them. "
+                    "No items have been changed."
+                ),
             )
         else:
-            status, text = "invalid", gettext("Please correct the errors below.")
+            request.inline_controls_parent = obj  # type: ignore[attr-defined]
+            response = action.function(inline, request, queryset)
+            if isinstance(response, HttpResponseBase):
+                return response
+            sent = list(messages.get_messages(request))
+            failed = any(message.level >= messages.ERROR for message in sent)
+            status = "error" if failed else "done"
+            text = " ".join(str(message) for message in sent) or gettext("Done.")
 
-        inline_admin_formsets = self.get_inline_formsets(  # type: ignore[attr-defined]
-            request, [formset], [inline], obj
+        fresh = self._inline_controls_fresh_formset(
+            request, obj, inline, formset_class, prefix, loaded
         )
-        return TemplateResponse(
-            request,
-            self.inline_controls_response_template,
-            {
-                "inline_admin_formsets": inline_admin_formsets,
-                "prefix": prefix,
-                "status": status,
-                "message": text,
-                "opts": self.opts,
-                "original": obj,
-                "change": True,
-                "is_popup": False,
-            },
+        return self._inline_controls_response(
+            request, obj, inline, fresh, prefix, status, text
         )
 
 
 __all__ = [
     "INFINITE",
     "PAGES",
+    "InlineActionSpec",
     "InlineControlsAdminMixin",
     "InlineControlsFormSetMixin",
     "InlineControlsMixin",
