@@ -15,7 +15,10 @@ if TYPE_CHECKING:
 
 
 def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessage]:
-    from django_admin_inline_controls.mixins import resolve_lookup
+    from django_admin_inline_controls.mixins import (
+        InlineControlsAdminMixin,
+        resolve_lookup,
+    )
 
     errors: list[checks.CheckMessage] = []
     name = type(inline).__qualname__
@@ -79,5 +82,17 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
                     "names must be strings without a leading '-' or commas.",
                     "admin_inline_controls.E007",
                 )
+
+    if inline.inline_save_button:
+        parent_admin = inline.admin_site._registry.get(inline.parent_model)
+        if parent_admin is not None and not isinstance(
+            parent_admin, InlineControlsAdminMixin
+        ):
+            error(
+                f"'{name}.inline_save_button' requires "
+                f"'{type(parent_admin).__qualname__}' to inherit from "
+                "'InlineControlsAdminMixin'.",
+                "admin_inline_controls.E008",
+            )
 
     return errors

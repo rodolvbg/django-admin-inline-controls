@@ -113,9 +113,16 @@ th.inline-controls-sortable .inline-controls-sort-toggle {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px;
+    gap: 4px 12px;
     padding: 8px 10px;
     font-size: 0.8125rem;
+}
+
+.inline-controls-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
 }
 
 .inline-controls-page,
@@ -131,13 +138,39 @@ th.inline-controls-sortable .inline-controls-sort-toggle {
     background: var(--selected-bg, #e4e4e4);
 }
 
-.inline-controls-pagination .inline-controls-count {
+.inline-controls-footer:not(.inline-controls-infinite) .inline-controls-count {
     margin-left: auto;
 }
 
 .inline-controls-infinite {
     justify-content: center;
-    gap: 12px;
+}
+
+.inline-controls-save {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.inline-controls-infinite .inline-controls-save,
+.inline-controls-footer > .inline-controls-save:first-child {
+    margin-left: auto;
+}
+
+.inline-controls-save .button {
+    box-sizing: border-box;
+    height: 30px;
+    margin: 0;
+    padding: 0 12px;
+    border-radius: 4px;
+    font-size: 0.8125rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.inline-controls-status-invalid,
+.inline-controls-status-failed {
+    color: var(--error-fg, #ba2121);
 }
 
 .inline-controls.inline-controls-loading {

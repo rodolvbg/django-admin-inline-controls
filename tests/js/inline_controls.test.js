@@ -230,3 +230,42 @@ describe("decorateHeaders / placeControls", () => {
         );
     });
 });
+
+describe("inlineFormData", () => {
+    it("collects only this inline's submittable fields", () => {
+        document.body.innerHTML = `
+            <form id="author_form">
+              <input name="csrfmiddlewaretoken" value="tok">
+              <input name="name" value="Parent">
+              <div id="books-group">
+                <input name="books-TOTAL_FORMS" value="2">
+                <input name="books-0-title" value="A">
+                <input type="checkbox" name="books-0-featured" checked>
+                <input type="checkbox" name="books-1-featured">
+                <select name="books-0-tags" multiple>
+                  <option value="1" selected></option><option value="2" selected></option>
+                </select>
+                <textarea name="books-0-notes">n</textarea>
+                <input name="books-__prefix__-title" value="template">
+                <input name="books-1-title" value="disabled" disabled>
+                <input name="books-f-q" form="books-inline-controls-filters" value="filter">
+                <button type="submit" name="books-0-button" value="x"></button>
+              </div>
+              <div id="books-2-group"><input name="books-2-0-title" value="other"></div>
+            </form>`;
+        const data = api.inlineFormData(
+            document.getElementById("books-group"),
+            document.getElementById("author_form"),
+        );
+
+        expect([...data.entries()]).toEqual([
+            ["csrfmiddlewaretoken", "tok"],
+            ["books-TOTAL_FORMS", "2"],
+            ["books-0-title", "A"],
+            ["books-0-featured", "on"],
+            ["books-0-tags", "1"],
+            ["books-0-tags", "2"],
+            ["books-0-notes", "n"],
+        ]);
+    });
+});

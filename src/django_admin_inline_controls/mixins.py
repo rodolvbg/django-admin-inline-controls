@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from django import forms
 from django.contrib.admin.utils import lookup_spawns_duplicates
-from django.core.exceptions import FieldDoesNotExist
-from django.db import models
+from django.core.exceptions import FieldDoesNotExist, PermissionDenied
+from django.db import models, router, transaction
 from django.db.models import QuerySet
 from django.db.models.constants import LOOKUP_SEP
 from django.forms import BaseInlineFormSet, Form
-from django.http import HttpRequest, QueryDict
+from django.http import Http404, HttpRequest, HttpResponse, QueryDict
+from django.template.response import TemplateResponse
+from django.urls import URLPattern, path
+from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.http import require_POST
 
 from django_admin_inline_controls.controls import (
     INFINITE,
@@ -135,6 +140,8 @@ class InlineControlsFormSetMixin:
     inline_controls_inline: InlineControlsMixin | None = None
     inline_controls_request: HttpRequest | None = None
     inline_controls_parent: Any = None
+    #: Infinite mode: render this many pages at once (after saving the inline).
+    inline_controls_pages_loaded: int | None = None
 
     prefix: str
     is_bound: bool
@@ -145,7 +152,13 @@ class InlineControlsFormSetMixin:
         request = self.inline_controls_request
         parent = self.inline_controls_parent
         self.inline_controls = (
-            InlineControls(inline, request, parent, self.prefix)
+            InlineControls(
+                inline,
+                request,
+                parent,
+                self.prefix,
+                pages_loaded=self.inline_controls_pages_loaded,
+            )
             if inline is not None
             and request is not None
             and parent is not None
@@ -197,11 +210,16 @@ class InlineControlsMixin:
     inline_filter_form: type[Form] | None = None
     #: Refresh the inline in place (fetch) instead of reloading the page.
     inline_controls_ajax: bool = True
+    #: Show a button that saves only this inline. Requires
+    #: ``InlineControlsAdminMixin`` on the parent ``ModelAdmin``.
+    inline_save_button: bool = False
     #: Wrapper template; it includes the inline's own ``template``.
     inline_controls_template = "django_admin_inline_controls/inline.html"
 
     # Provided by InlineModelAdmin.
     model: type[models.Model]
+    parent_model: type[models.Model]
+    admin_site: Any
     template: str
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -320,9 +338,142 @@ class InlineControlsMixin:
         return [*super().check(**kwargs), *check_inline_controls(self)]  # type: ignore[misc]
 
 
+class InlineControlsAdminMixin:
+    """Parent ``ModelAdmin`` side of ``InlineControlsMixin.inline_save_button``.
+
+    Adds an endpoint that validates and saves a single inline formset, then
+    returns it re-rendered::
+
+        @admin.register(Author)
+        class AuthorAdmin(InlineControlsAdminMixin, admin.ModelAdmin):
+            inlines = [BookInline]
+    """
+
+    inline_controls_response_template = (
+        "django_admin_inline_controls/save_response.html"
+    )
+
+    # Provided by ModelAdmin.
+    model: type[models.Model]
+    admin_site: Any
+    opts: Any
+
+    def get_urls(self) -> list[URLPattern]:
+        opts = self.model._meta
+        return [
+            path(
+                "<path:object_id>/inline-controls/<str:prefix>/save/",
+                self.admin_site.admin_view(self.inline_controls_save_view),
+                name=f"{opts.app_label}_{opts.model_name}_inline_controls_save",
+            ),
+            *super().get_urls(),  # type: ignore[misc]
+        ]
+
+    def _inline_controls_formset_class(
+        self, request: HttpRequest, obj: models.Model, prefix: str
+    ) -> tuple[Any, InlineControlsMixin]:
+        """Find the formset class and inline with ``prefix``, like the change
+        view does (a repeated default prefix gets ``-2``, ``-3``...)."""
+        seen: dict[str, int] = {}
+        for formset_class, inline in self.get_formsets_with_inlines(request, obj):  # type: ignore[attr-defined]
+            default = formset_class.get_default_prefix()
+            seen[default] = seen.get(default, 0) + 1
+            current = (
+                default
+                if seen[default] == 1 and default
+                else (f"{default}-{seen[default]}")
+            )
+            if current == prefix:
+                if not getattr(inline, "inline_save_button", False):
+                    break
+                return formset_class, inline
+        raise Http404(f"No inline with a save button and prefix {prefix!r}.")
+
+    def inline_controls_save_view(
+        self, request: HttpRequest, object_id: str, prefix: str
+    ) -> HttpResponse:
+        return require_POST(self._inline_controls_save)(request, object_id, prefix)
+
+    def _inline_controls_save(
+        self, request: HttpRequest, object_id: str, prefix: str
+    ) -> HttpResponse:
+        request.current_app = self.admin_site.name
+        obj = self.get_object(request, object_id)  # type: ignore[attr-defined]
+        if obj is None:
+            raise Http404
+        if not self.has_change_permission(request, obj):  # type: ignore[attr-defined]
+            raise PermissionDenied
+        formset_class, inline = self._inline_controls_formset_class(
+            request, obj, prefix
+        )
+        if not (
+            inline.has_change_permission(request, obj)  # type: ignore[attr-defined]
+            or inline.has_add_permission(request, obj)  # type: ignore[attr-defined]
+            or inline.has_delete_permission(request, obj)  # type: ignore[attr-defined]
+        ):
+            raise PermissionDenied
+
+        params = self.get_formset_kwargs(request, obj, inline, prefix)  # type: ignore[attr-defined]
+        formset = formset_class(**params)
+        if not inline.has_change_permission(request, obj):  # type: ignore[attr-defined]
+            # As in the change view: view-only rows aren't in the POST data,
+            # so skip their validation unless they were marked for deletion.
+            can_delete = inline.has_delete_permission(request, obj)  # type: ignore[attr-defined]
+            for index, form in enumerate(formset.initial_forms):
+                deleted = f"{formset.prefix}-{index}-DELETE" in request.POST
+                if not (can_delete and deleted):
+                    form._errors = {}
+                    form.cleaned_data = form.initial
+
+        # save_formset() and construct_change_message() expect the parent's
+        # form; only the inline was submitted, so it is an unchanged one.
+        form = self.get_form(request, obj, change=True)(instance=obj)  # type: ignore[attr-defined]
+        form.changed_data = []
+
+        if formset.is_valid():
+            with transaction.atomic(using=router.db_for_write(self.model)):
+                self.save_formset(request, form, formset, change=True)  # type: ignore[attr-defined]
+                message = self.construct_change_message(request, form, [formset])  # type: ignore[attr-defined]
+                if message:
+                    self.log_change(request, obj, message)  # type: ignore[attr-defined]
+            status, text = "saved", gettext("Saved.")
+            per_page = inline.get_inline_per_page(request, obj)
+            if inline.inline_pagination == INFINITE and per_page:
+                # Show as many pages as were loaded, re-queried after saving.
+                formset_class.inline_controls_pages_loaded = max(
+                    1, math.ceil(formset.initial_form_count() / per_page)
+                )
+            formset = formset_class(
+                instance=obj,
+                prefix=prefix,
+                queryset=inline.get_queryset(request),  # type: ignore[attr-defined]
+            )
+        else:
+            status, text = "invalid", gettext("Please correct the errors below.")
+
+        inline_admin_formsets = self.get_inline_formsets(  # type: ignore[attr-defined]
+            request, [formset], [inline], obj
+        )
+        return TemplateResponse(
+            request,
+            self.inline_controls_response_template,
+            {
+                "inline_admin_formsets": inline_admin_formsets,
+                "prefix": prefix,
+                "status": status,
+                "message": text,
+                "opts": self.opts,
+                "original": obj,
+                "change": True,
+                "is_popup": False,
+            },
+        )
+
+
 __all__ = [
     "INFINITE",
     "PAGES",
+    "InlineControlsAdminMixin",
     "InlineControlsFormSetMixin",
     "InlineControlsMixin",
 ]

@@ -1,0 +1,38 @@
+{% load i18n %}
+{% if controls.has_footer %}
+  <div class="inline-controls-footer{% if controls.mode == 'infinite' %} inline-controls-infinite{% endif %}">
+    {% if controls.paginator %}
+      {% if controls.mode == "infinite" %}
+        <span class="inline-controls-count">
+          {% blocktranslate with loaded=controls.loaded_count|default:0 total=controls.total_count %}Showing {{ loaded }} of {{ total }}{% endblocktranslate %}
+        </span>
+        {% if controls.next_page_url %}
+          <a href="{{ controls.next_page_url }}" class="inline-controls-load-more" data-inline-controls-more>{% translate "Load more" %}</a>
+        {% endif %}
+      {% else %}
+        <nav class="inline-controls-pagination" aria-label="{% translate 'Pagination' %}">
+          {% if controls.is_paginated %}
+            {% for link in controls.page_links %}
+              {% if link.url is None %}
+                <span class="inline-controls-ellipsis">{{ link.number }}</span>
+              {% elif link.current %}
+                <span class="inline-controls-page inline-controls-current" aria-current="page">{{ link.number }}</span>
+              {% else %}
+                <a href="{{ link.url }}" class="inline-controls-page" data-inline-controls-nav>{{ link.number }}</a>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </nav>
+        <span class="inline-controls-count">
+          {% blocktranslate count counter=controls.total_count %}{{ counter }} result{% plural %}{{ counter }} results{% endblocktranslate %}
+        </span>
+      {% endif %}
+    {% endif %}
+    {% if controls.save_url %}
+      <div class="inline-controls-save">
+        <span class="inline-controls-status" role="status" aria-live="polite"></span>
+        <button type="button" class="button default" data-inline-controls-save title="{% translate 'Saves only this inline. Other changes on the page are kept but not saved.' %}">{{ controls.save_label }}</button>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}

@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In-place refresh of a single inline, re-initializing the admin's inline
   and widget JS; unsaved-changes prompt.
 - Saving rows loaded across several pages.
+- `inline_save_button` with `InlineControlsAdminMixin`: save a single
+  inline without submitting or reloading the rest of the page.
 - System checks for every option.
 - `contrib.filters` (`[filters]` extra): django-filter `FilterSet` support.
 - `contrib.nested` (`[nested]` extra): django-nested-admin support.

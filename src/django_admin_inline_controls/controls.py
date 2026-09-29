@@ -13,13 +13,15 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from django.contrib.admin.utils import label_for_field
+from django.contrib.admin.utils import label_for_field, quote
 from django.core.exceptions import ValidationError
 from django.core.paginator import Page, Paginator
 from django.db.models import QuerySet
 from django.db.models.expressions import BaseExpression, OrderBy
 from django.forms import Form
 from django.http import HttpRequest, QueryDict
+from django.urls import NoReverseMatch, reverse
+from django.utils.functional import cached_property
 from django.utils.text import capfirst
 from django.utils.translation import gettext
 
@@ -101,6 +103,7 @@ class InlineControls:
         request: HttpRequest,
         parent: Any,
         prefix: str,
+        pages_loaded: int | None = None,
     ) -> None:
         self.inline = inline
         self.request = request
@@ -117,6 +120,7 @@ class InlineControls:
         self.paginator: Paginator | None = None
         self.page: Page | None = None
         self.loaded_count: int | None = None
+        self.pages_loaded = pages_loaded
 
     # Query parameter names -------------------------------------------------
 
@@ -175,6 +179,11 @@ class InlineControls:
         if self.page is not None and self.page.paginator.count:
             self.loaded_count = self.page.end_index()
             start = self.page.start_index() - 1
+            if self.mode == INFINITE and self.pages_loaded and self.per_page:
+                start = 0
+                self.loaded_count = min(
+                    self.page.paginator.count, self.pages_loaded * self.per_page
+                )
             page_pks = queryset.values_list("pk", flat=True)[start : self.loaded_count]
             return queryset.filter(pk__in=list(page_pks))
         return queryset
@@ -312,6 +321,33 @@ class InlineControls:
     def is_filtered(self) -> bool:
         return any(self.params.get(name) for name in self.filter_param_names)
 
+    # Saving ----------------------------------------------------------------
+
+    @cached_property
+    def save_url(self) -> str | None:
+        """Endpoint that saves only this inline, if enabled and routed."""
+        if not self.inline.inline_save_button:
+            return None
+        opts = self.inline.parent_model._meta
+        name = f"{opts.app_label}_{opts.model_name}_inline_controls_save"
+        try:
+            return reverse(
+                f"{self.inline.admin_site.name}:{name}",
+                args=[quote(self.parent.pk), self.prefix],
+            )
+        except NoReverseMatch:
+            return None
+
+    @property
+    def save_label(self) -> str:
+        return gettext("Save %(name)s") % {
+            "name": self.inline.model._meta.verbose_name_plural
+        }
+
+    @property
+    def has_footer(self) -> bool:
+        return self.paginator is not None or self.save_url is not None
+
     # URLs and config -------------------------------------------------------
 
     def _url(self, changes: Mapping[str, str], reset_page: bool = False) -> str:
@@ -339,6 +375,7 @@ class InlineControls:
                 "filterParams": self.filter_param_names,
                 "ordering": [column.as_json() for column in self.ordering_columns],
                 "nextUrl": self.next_page_url if self.mode == INFINITE else None,
+                "saveUrl": self.save_url,
                 "loadedCount": self.loaded_count,
                 "totalCount": self.total_count,
                 "messages": {
@@ -348,6 +385,9 @@ class InlineControls:
                     ),
                     "sortRemove": gettext("Remove from sorting"),
                     "sortToggle": gettext("Toggle sorting"),
+                    "saveFailed": gettext(
+                        "The changes could not be saved. Please try again."
+                    ),
                 },
             }
         )

@@ -1,7 +1,10 @@
 from django.contrib import admin
 from django.db.models.functions import Lower
 
-from django_admin_inline_controls.mixins import InlineControlsMixin
+from django_admin_inline_controls.mixins import (
+    InlineControlsAdminMixin,
+    InlineControlsMixin,
+)
 
 from .models import Article, Author, Book
 
@@ -22,6 +25,7 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
         "featured",
         "published__gte",
     ]
+    inline_save_button = True
 
 
 class ArticleInline(InlineControlsMixin, admin.TabularInline):
@@ -31,6 +35,7 @@ class ArticleInline(InlineControlsMixin, admin.TabularInline):
     inline_per_page = 15
     inline_pagination = "infinite"
     inline_ordering_fields = ["title", "words"]
+    inline_save_button = True
 
 
 class BookStackedInline(InlineControlsMixin, admin.StackedInline):
@@ -45,7 +50,7 @@ class BookStackedInline(InlineControlsMixin, admin.StackedInline):
 
 
 @admin.register(Author)
-class AuthorAdmin(admin.ModelAdmin):
+class AuthorAdmin(InlineControlsAdminMixin, admin.ModelAdmin):
     list_display = ["name"]
     inlines = [BookInline, ArticleInline, BookStackedInline]
 

@@ -217,6 +217,8 @@ def post_data(author, books=(), articles=()):
                 f"books-{index}-pages": str(book.pages),
             }
         )
+        if book.featured:
+            data[f"books-{index}-featured"] = "on"
     data.update(management_data("articles", len(articles), len(articles)))
     for index, article in enumerate(articles):
         data.update(

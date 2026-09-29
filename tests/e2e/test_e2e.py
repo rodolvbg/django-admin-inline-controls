@@ -7,7 +7,7 @@ stacked ``books-2`` inlines).
 import re
 
 import pytest
-from demo.models import Article, Book
+from demo.models import Article, Author, Book
 from playwright.sync_api import Page, expect
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -183,3 +183,69 @@ def test_unsaved_changes_prompt(change_page: Page):
 
     expect(page.locator("#books-group .inline-controls-current")).to_have_text("1")
     assert page.input_value("input[name='books-0-title']") == "Not saved"
+
+
+def test_save_only_the_inline(change_page: Page, author):
+    page = change_page
+    page.click("#books-group a.inline-controls-page >> text=2")
+    expect(page.locator("#books-group .inline-controls-current")).to_have_text("2")
+    page.fill("#id_name", "Parent not saved")
+    page.fill("input[name='books-0-title']", "Saved with the inline")
+    page.fill("input[name='articles-0-title']", "Other inline not saved")
+    page.click("#books-inline-controls [data-inline-controls-save]")
+
+    expect(page.locator("#books-inline-controls .inline-controls-status")).to_have_text(
+        "Saved."
+    )
+    expect(page.locator("#books-group .inline-controls-current")).to_have_text("2")
+    assert_not_reloaded(page)
+    # Other unsaved edits on the page are left alone.
+    assert page.input_value("#id_name") == "Parent not saved"
+    assert (
+        page.input_value("input[name='articles-0-title']") == "Other inline not saved"
+    )
+    assert Book.objects.filter(author=author, title="Saved with the inline").exists()
+    assert Author.objects.get(pk=author.pk).name == "Author"
+    assert not Article.objects.filter(title="Other inline not saved").exists()
+
+    # Leaving the page afterwards doesn't prompt for the saved inline.
+    page.click("#books-group a.inline-controls-page >> text=1")
+    expect(page.locator("#books-group .inline-controls-current")).to_have_text("1")
+
+
+def test_save_inline_shows_errors(change_page: Page, author):
+    page = change_page
+    page.fill("input[name='books-0-title']", "Not saved")
+    page.fill("input[name='books-1-pages']", "-1")
+    page.click("#books-inline-controls [data-inline-controls-save]")
+
+    expect(page.locator("#books-inline-controls .inline-controls-status")).to_have_text(
+        "Please correct the errors below."
+    )
+    expect(page.locator("#books-group .errorlist")).to_have_count(1)
+    # The submitted values are kept, so they can be fixed and saved again.
+    assert page.input_value("input[name='books-0-title']") == "Not saved"
+    assert not Book.objects.filter(title="Not saved").exists()
+
+    page.fill("input[name='books-1-pages']", "5")
+    page.click("#books-inline-controls [data-inline-controls-save]")
+    expect(page.locator("#books-inline-controls .inline-controls-status")).to_have_text(
+        "Saved."
+    )
+    assert Book.objects.filter(title="Not saved").exists()
+
+
+def test_save_infinite_inline_after_loading_more(change_page: Page, author):
+    page = change_page
+    page.add_init_script("delete window.IntersectionObserver")
+    page.reload()
+    page.click("#articles-inline-controls [data-inline-controls-more]")
+    expect(saved_rows(page, "articles")).to_have_count(20)
+    page.fill("input[name='articles-18-title']", "From page two")
+    page.click("#articles-inline-controls [data-inline-controls-save]")
+
+    expect(
+        page.locator("#articles-inline-controls .inline-controls-status")
+    ).to_have_text("Saved.")
+    expect(saved_rows(page, "articles")).to_have_count(20)
+    assert Article.objects.get(title="From page two").words == 19

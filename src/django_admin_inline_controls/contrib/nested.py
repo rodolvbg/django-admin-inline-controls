@@ -27,7 +27,7 @@ class NestedInlineControlsMixin(InlineControlsMixin):
 
     nested_admin keeps its own client-side formset state, so filters,
     sorting and page links reload the page instead of swapping the inline,
-    and infinite scroll is not available.
+    and neither infinite scroll nor the save-inline button is available.
     """
 
     inline_controls_ajax = False
@@ -41,6 +41,15 @@ class NestedInlineControlsMixin(InlineControlsMixin):
                     f"'{INFINITE}' on a nested_admin inline.",
                     obj=type(self),
                     id="admin_inline_controls.E101",
+                )
+            )
+        if self.inline_save_button:
+            errors.append(
+                checks.Error(
+                    f"'{type(self).__qualname__}.inline_save_button' is not "
+                    "supported on a nested_admin inline.",
+                    obj=type(self),
+                    id="admin_inline_controls.E102",
                 )
             )
         return errors

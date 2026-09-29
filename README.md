@@ -21,6 +21,8 @@ without leaving the change form.
   Several controlled inlines on the same page keep independent state.
 - Rows loaded from several pages are saved together, and unsaved edits are
   never silently thrown away.
+- Optional **"Save books" button** that saves only that inline, without
+  submitting (or reloading) the rest of the page.
 - Only depends on Django. No jQuery plugins, no htmx; works with
   `TabularInline` and `StackedInline`.
 
@@ -82,6 +84,7 @@ shareable and several inlines never clash.
 | `inline_filter_fields` | `()` | Filter lookups. A form is generated from them. |
 | `inline_filter_form` | `None` | Your own filter `forms.Form`. |
 | `inline_controls_ajax` | `True` | Refresh the inline in place instead of reloading the page. |
+| `inline_save_button` | `False` | Show a button that saves only this inline. See [Saving only the inline](#saving-only-the-inline). |
 
 Only columns declared in `inline_ordering_fields` can be sorted: ordering
 by an arbitrary field from the URL would let anyone infer the values of
@@ -98,7 +101,9 @@ your own form and handle the fields that aren't plain lookups:
 ```python
 class BookFilterForm(forms.Form):
     q = forms.CharField(required=False, label="Search")
-    status = forms.ChoiceField(required=False, choices=[("", "---"), *Book.Status.choices])
+    status = forms.ChoiceField(
+        required=False, choices=[("", "---"), *Book.Status.choices]
+    )
 
 
 class BookInline(InlineControlsMixin, admin.TabularInline):
@@ -133,6 +138,75 @@ The next page is appended when the "Load more" link scrolls into view (or
 is clicked). Loaded rows join the formset, so everything visible is saved
 with the object. Keep in mind Django's formset limits: by default a
 formset accepts at most 1000 forms per submission (`max_num`).
+
+### Saving only the inline
+
+```python
+from django_admin_inline_controls.mixins import (
+    InlineControlsAdminMixin,
+    InlineControlsMixin,
+)
+
+
+class BookInline(InlineControlsMixin, admin.TabularInline):
+    model = Book
+    inline_per_page = 20
+    inline_save_button = True
+
+
+@admin.register(Author)
+class AuthorAdmin(InlineControlsAdminMixin, admin.ModelAdmin):
+    inlines = [BookInline]
+```
+
+A **"Save books"** button (named after the inline's `verbose_name_plural`)
+appears in the inline's footer, next to the pagination.
+
+![The "Save books" button after saving an edited row](docs/screenshots/save-inline.png)
+
+**How it works**
+
+- Only that inline is sent: the JS posts its fields (files included), its
+  management form and the CSRF token with `fetch`. Nothing from the parent
+  form or from the other inlines.
+- The server builds just that formset against the parent object **as
+  stored in the database** (not the unsaved parent form), checks the
+  permissions, validates it and calls your `save_formset()` inside a
+  transaction. The change is recorded in the parent's history ("Changed
+  Title for book X"), like a regular admin save; a save with no changes
+  records nothing.
+- The response is the re-rendered inline, swapped in place:
+  - on errors, they are shown on their rows, as in a normal save, and the
+    submitted values are kept so they can be fixed and saved again;
+  - on success, a "Saved." status is shown and the inline no longer counts
+    as having unsaved changes.
+- Unsaved changes elsewhere on the page (the parent form, other inlines)
+  are left untouched: still on screen, still unsaved.
+- The current filters, ordering and page are kept. In infinite mode, as
+  many pages as were loaded are shown again after saving.
+
+**Requirements and caveats**
+
+1. **The parent `ModelAdmin` needs `InlineControlsAdminMixin`.** An inline
+   cannot register URLs of its own, so the endpoint lives on the parent
+   admin (`<object_id>/inline-controls/<prefix>/save/`). A system check
+   (`admin_inline_controls.E008`) reports a missing mixin; without it no
+   button is shown.
+2. **Permissions:** the user needs change permission on the parent object
+   (as for any save from the change form) and add, change or delete
+   permission on the inline's model. Within the formset, the inline's own
+   permissions apply exactly as in the change form (view-only rows are
+   not validated, rows can only be deleted with delete permission, …).
+3. **`save_formset(request, form, formset, change)` gets an unchanged
+   parent form**, built from the saved instance (`changed_data` is empty),
+   because the real one was not submitted. If you override `save_formset()`
+   and read `form.cleaned_data`, that won't work from this button.
+   `save_model()` and `save_related()` are not called, so the parent's own
+   fields (e.g. an `auto_now` "modified" date) are not updated.
+4. **Changes to the parent form are not saved** by this button. It says so
+   in its tooltip; use the admin's regular "Save" buttons to save
+   everything.
+5. Not available on nested_admin inlines (`admin_inline_controls.E102`).
 
 ## Optional extras
 
@@ -178,7 +252,24 @@ class BookInline(NestedInlineControlsMixin, nested_admin.NestedTabularInline):
 
 nested_admin keeps its own client-side formset state, so with it filters,
 sorting and page links reload the page instead of swapping the inline, and
-infinite scroll is not available.
+neither infinite scroll nor the save-inline button is available.
+
+## System checks
+
+Misconfigurations are reported by `manage.py check` (and at startup):
+
+| ID | Problem |
+|---|---|
+| `admin_inline_controls.E001` | `inline_pagination` is not `"pages"` or `"infinite"`. |
+| `admin_inline_controls.E002` | `inline_per_page` is not a positive integer or `None`. |
+| `admin_inline_controls.E003` | `inline_pagination = "infinite"` without `inline_per_page`. |
+| `admin_inline_controls.E004` | `inline_filter_fields` is a string instead of a list or tuple. |
+| `admin_inline_controls.E005` | `inline_filter_fields` refers to a field the model doesn't have. |
+| `admin_inline_controls.E006` | `inline_ordering_fields` is not a list, tuple or dict. |
+| `admin_inline_controls.E007` | An `inline_ordering_fields` column starts with `-` or contains a comma. |
+| `admin_inline_controls.E008` | `inline_save_button = True` but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
+| `admin_inline_controls.E101` | `inline_pagination = "infinite"` on a nested_admin inline. |
+| `admin_inline_controls.E102` | `inline_save_button = True` on a nested_admin inline. |
 
 ## JavaScript events
 
