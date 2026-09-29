@@ -442,29 +442,33 @@ def test_stacked_inline_shows_the_footer_summary(change_page: Page):
     expect(summary).to_contain_text("3250")
 
 
-def test_live_footer_follows_unsaved_edits(change_page: Page, author):
-    page = change_page
-    total = page.locator("#books-group tfoot [data-footer-key='0:pages']")
-    expect(total).to_have_text("3250")
-
-    page.fill("input[name='books-0-pages']", "110")  # was 10
-    expect(total).to_have_text("3350")
-    expect(total).to_have_class(re.compile(r"\binline-controls-footer-live\b"))
-
-    page.check("input[name='books-1-DELETE']")  # 20 pages
-    expect(total).to_have_text("3330")
-    expect(page.locator("#books-group tfoot [data-footer-key='0:title']")).to_have_text(
-        "24"
+def test_footer_values_are_readable_from_the_page(change_page: Page):
+    cell = change_page.locator(
+        '#books-inline-controls tfoot [data-footer-row="Total"][data-column="pages"]'
     )
 
-    # Saving the inline brings back the server's (now real) values.
-    page.click("#books-inline-controls [data-inline-controls-save]")
+    expect(cell).to_have_text("3250")
+    assert cell.get_attribute("data-value") == "3250"
+
+
+def test_footer_rows_are_rendered_without_javascript(
+    live_server, browser, admin_user, author
+):
+    context = browser.new_context(java_script_enabled=False)
+    page = context.new_page()
+    page.goto(
+        f"{live_server.url}/admin/login/?next=/admin/demo/author/{author.pk}/change/"
+    )
+    page.fill("#id_username", "admin")
+    page.fill("#id_password", "password")
+    page.click("input[type=submit]")
+
+    rows = page.locator("#books-group table tfoot.inline-controls-tfoot tr")
+    expect(rows).to_have_count(2)
+    expect(rows.first).to_contain_text("Total 25")
+    expect(rows.first.locator('[data-column="pages"]')).to_have_text("3250")
+    # The stacked inline has no table: its summary line is in the footer.
     expect(
-        page.locator(
-            "#books-inline-controls .inline-controls-save .inline-controls-status"
-        )
-    ).to_have_text("Saved.")
-    total = page.locator("#books-group tfoot [data-footer-key='0:pages']")
-    expect(total).to_have_text("3330")
-    expect(total).not_to_have_class(re.compile(r"\binline-controls-footer-live\b"))
-    assert Book.objects.filter(author=author).count() == 24
+        page.locator("#books-2-inline-controls [data-inline-controls-footer-rows]")
+    ).to_contain_text("3250")
+    context.close()

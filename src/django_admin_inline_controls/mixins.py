@@ -259,9 +259,11 @@ class InlineControlsMixin:
     #: What the footer rows add up: ``"filtered"`` (every row matching the
     #: filters, on every page) or ``"page"`` (the rows shown).
     inline_footer_scope: str = FOOTER_FILTERED
-    #: Recompute ``Sum``/``Count``/``Avg`` footer values in the browser while
-    #: rows are edited, added or marked for deletion.
-    inline_footer_live: bool = False
+    #: Render the footer rows in the table's <tfoot>, under their columns
+    #: (tabular inlines). ``False``, or an inline without a table, shows them
+    #: as a summary line in the footer instead.
+    inline_footer_tfoot: bool = True
+    inline_footer_tfoot_template = "django_admin_inline_controls/tfoot.html"
     #: CSS selectors the JS uses to find its way in the inline's markup,
     #: merged over ``DEFAULT_SELECTORS``: set the keys that differ in your
     #: theme or inline template.

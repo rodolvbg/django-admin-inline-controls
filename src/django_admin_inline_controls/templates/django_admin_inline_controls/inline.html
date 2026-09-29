@@ -4,6 +4,7 @@
   The JS relies on the id, the data-inline-controls attribute and the
   inline-controls-* classes: keep them when overriding blocks.
 {% endcomment %}
+{% load inline_controls %}
 {% with controls=inline_admin_formset.formset.inline_controls opts=inline_admin_formset.opts %}
   {% if controls %}
     {% block container %}
@@ -14,7 +15,8 @@
         {% endblock toolbar %}
         {% block before_inline %}{% endblock %}
         {% block inline %}
-          {% include opts.inline_controls_inner_template %}
+          {# The inline's own template, with the footer rows as its <tfoot>. #}
+          {% inline_controls_render_inline opts.inline_controls_inner_template %}
         {% endblock inline %}
         {% block after_inline %}{% endblock %}
         {% block footer %}

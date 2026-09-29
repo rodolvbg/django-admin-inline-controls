@@ -36,7 +36,6 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
         ("Total", {"title": Count("pk"), "pages": Sum("pages")}),
         ("Average", {"pages": Avg("pages")}),
     ]
-    inline_footer_live = True
 
     @inline_action(
         permissions=["change"],

@@ -121,9 +121,9 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
                         "admin_inline_controls.E014",
                     )
 
-    if not isinstance(inline.inline_footer_live, bool):
+    if not isinstance(inline.inline_footer_tfoot, bool):
         error(
-            f"The value of '{name}.inline_footer_live' must be True or False.",
+            f"The value of '{name}.inline_footer_tfoot' must be True or False.",
             "admin_inline_controls.E017",
         )
 

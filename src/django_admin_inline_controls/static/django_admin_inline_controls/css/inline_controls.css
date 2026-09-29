@@ -241,10 +241,6 @@ th.inline-controls-sortable .inline-controls-sort-toggle {
     gap: 2px;
 }
 
-.inline-controls-footer-rows[hidden] {
-    display: none;
-}
-
 .inline-controls-footer-row {
     display: flex;
     flex-wrap: wrap;
@@ -280,12 +276,4 @@ th.inline-controls-sortable .inline-controls-sort-toggle {
 
 .inline-group table tfoot.inline-controls-tfoot .inline-controls-footer-value {
     font-weight: bold;
-}
-
-.inline-controls-footer-live {
-    color: var(--message-warning-fg, #b35900);
-}
-
-.inline-controls-footer-stale {
-    opacity: 0.55;
 }

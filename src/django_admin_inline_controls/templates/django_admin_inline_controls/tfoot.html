@@ -1,0 +1,36 @@
+{% comment %}
+  The footer rows as the <tfoot> of a tabular inline's table, one cell per
+  column. Rendered by the server, no JS. Override per inline with
+  `inline_footer_tfoot_template` (e.g. a template that extends this one);
+  format the values with `format_inline_footer_value()`.
+  data-footer-key / data-footer-row / data-column / data-value (the number,
+  unformatted) are there for the page's own JS.
+{% endcomment %}
+{% block tfoot %}
+  <tfoot class="inline-controls-tfoot">
+    {% for row in tfoot_rows %}
+      {% block tfoot_row %}
+        <tr class="inline-controls-tfoot-row" data-footer-row="{{ row.label }}">
+          {% if row.label_colspan %}
+            <th scope="row" colspan="{{ row.label_colspan }}">
+              {% block tfoot_label %}<span class="inline-controls-footer-label">{{ row.label }}</span>{% endblock tfoot_label %}
+            </th>
+          {% endif %}
+          {% for slot in row.cells %}
+            {% block tfoot_cell %}
+              {% if slot.cell %}
+                <td class="inline-controls-footer-value field-{{ slot.cell.column }}">
+                  {% if slot.label_here %}<span class="inline-controls-footer-label">{{ row.label }}</span>{% endif %}
+                  <span class="inline-controls-footer-number" data-footer-key="{{ slot.key }}" data-footer-row="{{ row.label }}" data-column="{{ slot.cell.column }}" data-value="{{ slot.cell.raw }}">{% block tfoot_value %}{{ slot.cell.value }}{% endblock tfoot_value %}</span>
+                </td>
+              {% else %}
+                <td></td>
+              {% endif %}
+            {% endblock tfoot_cell %}
+          {% endfor %}
+          {% if row.trailing %}<td colspan="{{ row.trailing }}"></td>{% endif %}
+        </tr>
+      {% endblock tfoot_row %}
+    {% endfor %}
+  </tfoot>
+{% endblock tfoot %}

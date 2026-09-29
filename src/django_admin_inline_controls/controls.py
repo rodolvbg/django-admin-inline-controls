@@ -11,17 +11,17 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from django.contrib.admin.utils import label_for_field, quote
 from django.core.exceptions import ValidationError
 from django.core.paginator import Page, Paginator
-from django.db.models import Avg, Count, F, QuerySet, Sum
-from django.db.models.expressions import OrderBy, Star
+from django.db.models import QuerySet
+from django.db.models.expressions import OrderBy
 from django.forms import Form
 from django.http import HttpRequest, QueryDict
 from django.urls import NoReverseMatch, reverse
-from django.utils.formats import get_format
 from django.utils.functional import cached_property
 from django.utils.text import capfirst
 from django.utils.translation import gettext
@@ -86,13 +86,11 @@ class OrderingColumn:
 class FooterCell:
     column: str
     column_label: str
+    #: Formatted for display (localized, or the inline's own format).
     value: str
-    #: How the JS recomputes it with unsaved edits, or ``None`` if it can't.
-    live: dict[str, Any] | None = None
-
-    @property
-    def live_json(self) -> str:
-        return json.dumps(self.live)
+    #: Machine-readable value (``"1234.5"``) for the page's JS, or ``""`` when
+    #: it isn't a number.
+    raw: str = ""
 
 
 @dataclass(frozen=True)
@@ -104,37 +102,43 @@ class FooterRow:
 
 
 @dataclass(frozen=True)
+class TfootCell:
+    """One cell of a footer row in the <tfoot>, under its column."""
+
+    #: The value shown here, or ``None`` for an empty cell.
+    cell: FooterCell | None = None
+    #: ``"<row index>:<column>"``, as ``data-footer-key``.
+    key: str = ""
+    #: The row's label goes in this cell, before the value (when the first
+    #: value is in the first column, there is no empty column for it).
+    label_here: bool = False
+
+
+@dataclass(frozen=True)
+class TfootRow:
+    index: int
+    label: str
+    #: Columns the label spans at the start of the row; ``0`` when it goes
+    #: into the first value's cell instead.
+    label_colspan: int
+    cells: list[TfootCell]
+    #: Empty columns after the last value, up to the table's width.
+    trailing: int = 0
+
+
+@dataclass(frozen=True)
 class PageLink:
     number: int | str
     url: str | None
     current: bool = False
 
 
-def live_footer_spec(value: Any) -> dict[str, Any] | None:
-    """How the browser can recompute an aggregate from the rows it shows.
-
-    Only ``Sum``, ``Count`` and ``Avg`` of a plain field of the row (no
-    ``filter=``, no ``distinct``) qualify: their result can be corrected by
-    the difference between the inputs' current and saved values.
-    """
-    if not isinstance(value, Sum | Count | Avg):
-        return None
-    if value.filter is not None or getattr(value, "distinct", False):
-        return None
-    (source,) = value.get_source_expressions()[:1] or (None,)
-    name: str = getattr(source, "name", "") if isinstance(source, F) else ""
-    if isinstance(value, Count) and (isinstance(source, Star) or name == "pk"):
-        return {"fn": "count", "field": None}
-    if not name or "__" in name:
-        return None
-    fn = {Sum: "sum", Count: "count", Avg: "avg"}[type(value)]
-    return {"fn": fn, "field": name}
-
-
-def _number(value: Any) -> float | int | None:
-    if value is None:
-        return None
-    return value if isinstance(value, int) else float(value)
+def raw_number(value: Any) -> str:
+    """A footer value as plain digits for JS (``"1234.5"``), ``""`` if not a
+    number."""
+    if isinstance(value, bool) or not isinstance(value, int | float | Decimal):
+        return ""
+    return format(value, "f") if isinstance(value, Decimal) else repr(value)
 
 
 def normalize_ordering_fields(
@@ -196,6 +200,8 @@ class InlineControls:
         self.loaded_count: int | None = None
         self.pages_loaded = pages_loaded
         self.selectors = inline.get_inline_controls_selectors(request, parent)
+        #: Set when the footer rows were rendered inside the inline's table.
+        self.tfoot_rendered = False
 
     # Query parameter names -------------------------------------------------
 
@@ -455,8 +461,45 @@ class InlineControls:
         return (
             self.paginator is not None
             or self.save_url is not None
-            or bool(self.footer_rows)
+            or bool(self.summary_rows)
         )
+
+    @property
+    def summary_rows(self) -> list[FooterRow]:
+        """The footer rows shown as a summary in the footer: all of them,
+        unless they were rendered in the table's <tfoot>."""
+        return [] if self.tfoot_rendered else self.footer_rows
+
+    def tfoot_rows(self, columns: list[str], width: int = 0) -> list[TfootRow] | None:
+        """The footer rows laid out under ``columns`` (the table's visible
+        columns, after its leading "original" one) in a table ``width``
+        columns wide, or ``None`` if a value's column isn't among them."""
+        positions = {name: index + 1 for index, name in enumerate(columns)}
+        rows = []
+        for index, row in enumerate(self.footer_rows):
+            if any(cell.column not in positions for cell in row.cells):
+                return None
+            by_position = {positions[cell.column]: cell for cell in row.cells}
+            if not by_position:
+                continue
+            first, last = min(by_position), max(by_position)
+            # The narrow "original" column alone doesn't fit the label: it
+            # spans the empty columns before the first value, or goes into
+            # that value's cell.
+            label_colspan = first if first >= 2 else 0
+            cells = [] if label_colspan else [TfootCell()]
+            for position in range(max(first, 1), last + 1):
+                cell = by_position.get(position)
+                cells.append(
+                    TfootCell(
+                        cell=cell,
+                        key=f"{index}:{cell.column}" if cell else "",
+                        label_here=not label_colspan and position == first,
+                    )
+                )
+            trailing = max(width - last - 1, 0)
+            rows.append(TfootRow(index, row.label, label_colspan, cells, trailing))
+        return rows
 
     # Footer rows -----------------------------------------------------------
 
@@ -472,24 +515,12 @@ class InlineControls:
             if self.inline.inline_footer_scope == FOOTER_PAGE
             else self.filtered_queryset
         )
-        live = self.footer_live
-        specs = {
-            (row, column): live_footer_spec(value) if live else None
-            for row, (_, cells) in enumerate(definitions)
-            for column, value in cells.items()
-        }
         aggregates = {
             f"footer_{row}_{column}": value
             for row, (_, cells) in enumerate(definitions)
             for column, value in cells.items()
             if getattr(value, "contains_aggregate", False)
         }
-        # Averages are recomputed from their sum and count, so those are
-        # fetched too, in the same query.
-        for (row, column), spec in specs.items():
-            if spec and spec["fn"] == "avg":
-                aggregates[f"footer_{row}_{column}_sum"] = Sum(spec["field"])
-                aggregates[f"footer_{row}_{column}_count"] = Count(spec["field"])
         results = queryset.order_by().aggregate(**aggregates) if aggregates else {}
         rows = []
         for row, (label, cells) in enumerate(definitions):
@@ -500,16 +531,6 @@ class InlineControls:
                     value = results[key]
                 elif callable(value):
                     value = value(queryset)
-                spec = specs[(row, column)]
-                if spec is not None:
-                    if spec["fn"] == "avg":
-                        spec = {
-                            **spec,
-                            "sum": _number(results[f"{key}_sum"]) or 0,
-                            "count": results[f"{key}_count"],
-                        }
-                    else:
-                        spec = {**spec, "base": _number(value) or 0}
                 values.append(
                     FooterCell(
                         column=column,
@@ -517,35 +538,11 @@ class InlineControls:
                         value=str(
                             self.inline.format_inline_footer_value(column, value)
                         ),
-                        live=spec,
+                        raw=raw_number(value),
                     )
                 )
             rows.append(FooterRow(label=str(label), cells=values))
         return rows
-
-    @property
-    def footer_live(self) -> bool:
-        """Footer values are recomputed while editing, unless the inline
-        formats them itself (the browser can't reproduce that)."""
-        from django_admin_inline_controls.mixins import InlineControlsMixin
-
-        return bool(self.inline.inline_footer_live) and (
-            type(self.inline).format_inline_footer_value
-            is InlineControlsMixin.format_inline_footer_value
-        )
-
-    @property
-    def number_format(self) -> dict[str, Any]:
-        """How numbers are written in the active language, for the JS."""
-        from django.conf import settings
-        from django.utils.translation import get_language
-
-        return {
-            "language": get_language() or settings.LANGUAGE_CODE,
-            "decimal": get_format("DECIMAL_SEPARATOR"),
-            "thousands": get_format("THOUSAND_SEPARATOR"),
-            "grouping": bool(settings.USE_THOUSAND_SEPARATOR),
-        }
 
     # URLs and config -------------------------------------------------------
 
@@ -586,8 +583,6 @@ class InlineControls:
                 ],
                 "pkName": self.inline.model._meta.pk.name,
                 "selectors": self.selectors,
-                "footerLive": self.footer_live and bool(self.footer_rows),
-                "numberFormat": self.number_format,
                 "loadedCount": self.loaded_count,
                 "totalCount": self.total_count,
                 "messages": {
@@ -613,10 +608,6 @@ class InlineControls:
                     "allSelected": gettext("All %(total)s selected"),
                     "selectRow": gettext("Select this row"),
                     "selectAllRows": gettext("Select all rows on this page"),
-                    "footerLive": gettext("Includes unsaved changes"),
-                    "footerStale": gettext(
-                        "Saved value; unsaved changes are not included"
-                    ),
                 },
             }
         )

@@ -11,15 +11,15 @@
       {% block footer_start %}{% endblock %}
 
       {% block footer_rows %}
-        {% if controls.footer_rows %}
+        {% if controls.summary_rows %}
           <div class="inline-controls-footer-rows" data-inline-controls-footer-rows>
-            {% for row in controls.footer_rows %}
+            {% for row in controls.summary_rows %}
               {% block footer_row %}
                 <div class="inline-controls-footer-row" data-label="{{ row.label }}">
                   <span class="inline-controls-footer-label">{{ row.label }}:</span>
                   {% for cell in row.cells %}
                     {% block footer_cell %}
-                      <span class="inline-controls-footer-cell" data-column="{{ cell.column }}" data-footer-key="{{ forloop.parentloop.counter0 }}:{{ cell.column }}" data-live="{{ cell.live_json }}">
+                      <span class="inline-controls-footer-cell" data-column="{{ cell.column }}" data-footer-key="{{ forloop.parentloop.counter0 }}:{{ cell.column }}" data-footer-row="{{ row.label }}" data-value="{{ cell.raw }}">
                         <span class="inline-controls-footer-column">{{ cell.column_label }}</span>
                         <span class="inline-controls-footer-value">{{ cell.value }}</span>
                       </span>

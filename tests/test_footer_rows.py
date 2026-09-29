@@ -1,18 +1,17 @@
-import json
 from decimal import Decimal
 
 import pytest
 from demo.models import Author, Book
 from django.contrib import admin
 from django.db import connection
-from django.db.models import Avg, Count, F, Max, Q, Sum
+from django.db.models import Avg, Count, Max, Sum
 from django.test import RequestFactory
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import translation
 from django.utils.html import format_html
 
-from django_admin_inline_controls.controls import live_footer_spec
+from django_admin_inline_controls.controls import raw_number
 from django_admin_inline_controls.mixins import InlineControlsMixin
 
 
@@ -153,10 +152,10 @@ def test_footer_rows_render_and_count_for_the_footer(admin_client, author):
     url = reverse("admin:demo_author_change", args=[author.pk])
     html = admin_client.get(url).content.decode()
 
-    assert "data-inline-controls-footer-rows" in html
+    # Tabular inlines get a <tfoot>; the stacked one keeps the summary line.
+    assert html.count('<tfoot class="inline-controls-tfoot">') == 2
+    assert html.count("data-inline-controls-footer-rows") == 1
     assert 'data-column="pages"' in html
-    # The stacked inline has its own total.
-    assert html.count('data-label="Total"') == 3
 
 
 def test_footer_rows_follow_saving_the_inline(admin_client, author):
@@ -172,7 +171,7 @@ def test_footer_rows_follow_saving_the_inline(admin_client, author):
     url = reverse("admin:demo_author_inline_controls_save", args=[author.pk, "books"])
     html = admin_client.post(url, data).content.decode()
 
-    assert '<span class="inline-controls-footer-value">4240</span>' in html
+    assert 'data-value="4240">4240</span>' in html
 
 
 @pytest.mark.parametrize(
@@ -209,122 +208,156 @@ def test_valid_footer_configuration():
     assert not [e for e in inline.check() if e.id.startswith("admin_inline_controls")]
 
 
-# Live footer ----------------------------------------------------------------
+# Values for the page's JS ---------------------------------------------------
 
 
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        (Sum("pages"), {"fn": "sum", "field": "pages"}),
-        (Avg("pages"), {"fn": "avg", "field": "pages"}),
-        (Count("pk"), {"fn": "count", "field": None}),
-        (Count("*"), {"fn": "count", "field": None}),
-        (Count("published"), {"fn": "count", "field": "published"}),
-        (Max("pages"), None),
-        (Sum("pages", filter=Q(featured=True)), None),
-        (Count("pages", distinct=True), None),
-        (Sum("author__id"), None),
-        (Sum(F("pages") * 2), None),
-        (lambda queryset: 1, None),
-        (42, None),
+        (3250, "3250"),
+        (130.04, "130.04"),
+        (Decimal("1234.50"), "1234.50"),
+        (Decimal("1E+3"), "1000"),
+        (None, ""),
+        (True, ""),
+        ("n/a", ""),
     ],
 )
-def test_live_spec(value, expected):
-    assert live_footer_spec(value) == expected
+def test_raw_number(value, expected):
+    assert raw_number(value) == expected
 
 
-def live_cells(state):
-    return {
-        (row.label, cell.column): cell.live
-        for row in state.footer_rows
-        for cell in row.cells
-    }
-
-
-def test_live_bases(get_request, author):
-    inline = make_inline(
-        inline_footer_live=True,
-        inline_footer_rows=[
-            ("Total", {"title": Count("pk"), "pages": Sum("pages")}),
-            ("Average", {"pages": Avg("pages")}),
-            ("Max", {"pages": Max("pages")}),
-        ],
-    )
-    state = controls(inline, get_request(), author)
-    with CaptureQueriesContext(connection) as queries:
-        cells_ = live_cells(state)
-
-    assert len(queries) == 1  # the average's sum and count come in the same query
-    assert cells_ == {
-        ("Total", "title"): {"fn": "count", "field": None, "base": 25},
-        ("Total", "pages"): {"fn": "sum", "field": "pages", "base": 3250},
-        ("Average", "pages"): {"fn": "avg", "field": "pages", "sum": 3250, "count": 25},
-        ("Max", "pages"): None,
-    }
-    config = json.loads(state.config_json)
-    assert config["footerLive"] is True
-    assert config["numberFormat"] == {
-        "language": "en-us",
-        "decimal": ".",
-        "thousands": ",",
-        "grouping": False,
-    }
-
-
-def test_live_is_off_by_default_and_with_a_format_hook(get_request, author):
-    rows = [("Total", {"pages": Sum("pages")})]
-
-    class Formatted(InlineControlsMixin, admin.TabularInline):
-        model = Book
-        inline_footer_rows = rows
-        inline_footer_live = True
-
-        def format_inline_footer_value(self, column, value):
-            return f"{value} p."
-
-    off = controls(make_inline(inline_footer_rows=rows), get_request(), author)
-    formatted = controls(Formatted(Author, admin.site), get_request(), author)
-
-    for state in (off, formatted):
-        assert live_cells(state) == {("Total", "pages"): None}
-        assert json.loads(state.config_json)["footerLive"] is False
-
-
-def test_live_number_format_follows_the_language(get_request, author):
-    inline = make_inline(
-        inline_footer_live=True, inline_footer_rows=[("T", {"pages": Sum("pages")})]
-    )
-    with translation.override("es"):
-        config = json.loads(controls(inline, get_request(), author).config_json)
-
-    assert config["numberFormat"]["language"] == "es"
-    assert config["numberFormat"]["decimal"] == ","
-    assert config["messages"]["footerLive"] == "Incluye cambios sin guardar"
-
-
-def test_live_spec_is_rendered_for_the_js(admin_client, author):
+def test_raw_values_are_rendered_for_the_js(admin_client, author):
     url = reverse("admin:demo_author_change", args=[author.pk])
-    html = admin_client.get(url).content.decode()
+    with translation.override("es"):
+        html = admin_client.get(url).content.decode()
 
-    assert 'data-footer-key="0:pages"' in html
-    assert "&quot;fn&quot;: &quot;sum&quot;" in html
+    # Localized text for people, plain digits for the page's JS.
+    assert (
+        'data-footer-key="1:pages" data-footer-row="Average" data-column="pages" '
+        'data-value="130.0">130</span>'
+    ) in html
+    assert 'data-column="pages" data-value="3250">3250</span>' in html
 
 
-def test_check_live_type():
-    ids = [e.id for e in make_inline(inline_footer_live="yes").check()]
+# <tfoot> layout ---------------------------------------------------------------
+
+from django_admin_inline_controls.controls import (  # noqa: E402
+    FooterCell,
+    FooterRow,
+    InlineControls,
+)
+
+
+def layout(request, rows, columns, width=0):
+    state = InlineControls(make_inline(), request, None, "books")
+    state.__dict__["footer_rows"] = [
+        FooterRow(label, [FooterCell(c, c, v, v) for c, v in cells.items()])
+        for label, cells in rows
+    ]
+    result = state.tfoot_rows(columns, width)
+    if result is None:
+        return None
+    return [
+        (
+            row.label,
+            row.label_colspan,
+            [
+                (s.cell.column if s.cell else None, s.key, s.label_here)
+                for s in row.cells
+            ],
+            row.trailing,
+        )
+        for row in result
+    ]
+
+
+def test_tfoot_label_spans_the_columns_before_the_first_value(get_request):
+    assert layout(
+        get_request(), [("Avg", {"pages": "5"})], ["title", "status", "pages"], 5
+    ) == [("Avg", 3, [("pages", "0:pages", False)], 1)]
+
+
+def test_tfoot_label_goes_into_the_first_column_value(get_request):
+    assert layout(
+        get_request(),
+        [("Total", {"title": "9", "pages": "5"})],
+        ["title", "status", "pages"],
+        4,
+    ) == [
+        (
+            "Total",
+            0,
+            [
+                (None, "", False),  # the narrow "original" column
+                ("title", "0:title", True),
+                (None, "", False),
+                ("pages", "0:pages", False),
+            ],
+            0,
+        )
+    ]
+
+
+def test_tfoot_needs_every_value_column_in_the_table(get_request):
+    assert layout(get_request(), [("T", {"hidden": "1"})], ["title"]) is None
+    assert layout(get_request(), [("T", {})], ["title"]) == []
+
+
+def test_visible_columns_skip_hidden_widgets():
+    from django_admin_inline_controls.templatetags.inline_controls import (
+        _header_width,
+        _visible_columns,
+    )
+
+    class HiddenWidget:
+        is_hidden = True
+
+    class Visible:
+        is_hidden = False
+
+    class FormSet:
+        def fields(self):
+            yield {"name": "id", "widget": HiddenWidget()}
+            yield {"name": "title", "widget": Visible()}
+            yield {"name": "computed", "widget": {"is_hidden": False}}  # read-only
+
+    assert _visible_columns(FormSet()) == ["title", "computed"]
+    assert _header_width('<thead><tr><th></th><th colspan="2">a</th></tr></thead>') == 3
+    assert _header_width("<table></table>") == 0
+
+
+def test_tfoot_can_be_turned_off(admin_client, author, settings):
+    from demo.admin import BookInline
+
+    BookInline.inline_footer_tfoot = False
+    try:
+        url = reverse("admin:demo_author_change", args=[author.pk])
+        html = admin_client.get(url).content.decode()
+    finally:
+        BookInline.inline_footer_tfoot = True
+
+    # Only the articles' tfoot is left; the books' rows are a summary now.
+    assert html.count('<tfoot class="inline-controls-tfoot">') == 1
+    assert html.count("data-inline-controls-footer-rows") == 2
+
+
+def test_custom_tfoot_template(admin_client, author):
+    from demo.admin import BookInline
+
+    BookInline.inline_footer_tfoot_template = "custom/tfoot.html"
+    try:
+        url = reverse("admin:demo_author_change", args=[author.pk])
+        html = admin_client.get(url).content.decode()
+    finally:
+        BookInline.inline_footer_tfoot_template = (
+            "django_admin_inline_controls/tfoot.html"
+        )
+
+    assert "<em>3250 pages</em>" in html
+
+
+def test_check_tfoot_type():
+    ids = [e.id for e in make_inline(inline_footer_tfoot="yes").check()]
 
     assert "admin_inline_controls.E017" in ids
-
-
-def test_live_bases_of_an_empty_selection(get_request, author):
-    inline = make_inline(
-        inline_footer_live=True,
-        inline_filter_fields=["title__icontains"],
-        inline_footer_rows=[("T", {"pages": Sum("pages"), "title": Avg("pages")})],
-    )
-    request = get_request({"books-f-title__icontains": "nothing matches"})
-
-    assert live_cells(controls(inline, request, author)) == {
-        ("T", "pages"): {"fn": "sum", "field": "pages", "base": 0},
-        ("T", "title"): {"fn": "avg", "field": "pages", "sum": 0, "count": 0},
-    }

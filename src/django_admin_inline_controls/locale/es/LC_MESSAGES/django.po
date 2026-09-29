@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: django-admin-inline-controls 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-29 14:58-0500\n"
+"POT-Creation-Date: 2026-09-29 15:33-0500\n"
 "PO-Revision-Date: 2026-09-29 18:00+0200\n"
 "Last-Translator: Rodolfo Becerra\n"
 "Language-Team: Spanish\n"
@@ -96,14 +96,6 @@ msgstr "Seleccionar esta fila"
 #: controls.py
 msgid "Select all rows on this page"
 msgstr "Seleccionar todas las filas de esta página"
-
-#: controls.py
-msgid "Includes unsaved changes"
-msgstr "Incluye cambios sin guardar"
-
-#: controls.py
-msgid "Saved value; unsaved changes are not included"
-msgstr "Valor guardado; no incluye los cambios sin guardar"
 
 #: mixins.py
 msgid "contains"

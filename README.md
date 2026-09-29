@@ -9,7 +9,7 @@
 Pagination, filtering and sortable columns for Django admin inlines —
 without leaving the change form.
 
-![A tabular inline with an action menu and two selected rows, filters, sorting by pages, live-updated Total and Average rows, page links and the Save books button](docs/screenshots/hero.png)
+![A tabular inline with an action menu and two selected rows, filters, sorting by pages, Total and Average rows, page links and the Save books button](docs/screenshots/hero.png)
 
 - **Pagination**: page links, or infinite scroll that appends rows as you
   reach the end of the inline.
@@ -91,7 +91,8 @@ shareable and several inlines never clash.
 | `inline_actions` | `()` | Actions for the selected rows. See [Inline actions](#inline-actions). |
 | `inline_footer_rows` | `()` | Rows of totals, averages… below the table. See [Footer rows](#footer-rows). |
 | `inline_footer_scope` | `"filtered"` | What the footer rows add up: `"filtered"` or `"page"`. |
-| `inline_footer_live` | `False` | Recompute `Sum` / `Count` / `Avg` footer values while rows are edited. |
+| `inline_footer_tfoot` | `True` | Render the footer rows in the table's `<tfoot>` (tabular inlines); `False` shows them as a summary line. |
+| `inline_footer_tfoot_template` | `django_admin_inline_controls/tfoot.html` | Template of that `<tfoot>`. |
 
 Only columns declared in `inline_ordering_fields` can be sorted: ordering
 by an arbitrary field from the URL would let anyone infer the values of
@@ -334,39 +335,66 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
     `admin_inline_controls.E016`).
 - Values come from the **database**. The rows follow filtering, sorting,
   paging, saving the inline and actions, since they arrive with the
-  refreshed inline. For unsaved edits, see live values below.
-- **Formatting:** numbers are localized (`1.234,5` in Spanish), floats and
-  decimals rounded to 2 decimals at most. Override
-  `format_inline_footer_value(column, value)` for currencies, units…
-  (return safe HTML for markup), or `get_inline_footer_rows(request, obj)`
-  for dynamic rows.
-- **Live values** — `inline_footer_live = True` recomputes values in the
-  browser as rows are edited, added or marked for deletion, highlighted
-  with an "Includes unsaved changes" tooltip until the inline is saved or
-  refreshed. The server's value is corrected by the difference between
-  each shown row's current and saved value (its input's `defaultValue`),
-  so it also works with the `"filtered"` scope, rows on other pages
-  included:
+  refreshed inline — with `inline_save_button`, saving the inline updates
+  them without reloading the page.
+- **Where they go — rendered by the server, no JS:** on tabular inlines,
+  the rows are the table's own `<tfoot>`, each value under its column; the
+  label spans the columns before the first value. The inline's template is
+  rendered as usual (Django's, a theme's or your own) and the `<tfoot>` is
+  inserted before its `</table>`, so there is no copy of Django's template
+  to keep in sync. On stacked inlines, with `inline_footer_tfoot = False`,
+  or when a value's column isn't a column of the table, they are a summary
+  line in the footer ("Total: Pages 3250").
 
-  | Aggregate | Live? |
-  |---|---|
-  | `Sum("field")` | ✅ sum of the differences |
-  | `Count("pk")`, `Count("*")` | ✅ new rows with content +1, rows marked for deletion −1 |
-  | `Count("field")`, `Avg("field")` | ✅ from the sum and count of non-empty values (fetched in the same query) |
-  | `Max`, `Min`, `filter=`, `distinct=True`, expressions (`F("a") * F("b")`), related fields, callables, constants | ❌ kept, and dimmed as "Saved value" while there are unsaved changes |
+#### Changing how they look
 
-  The field must be an input of the rows (read-only fields can't change
-  anyway). Numbers are read as typed — localized text inputs included —
-  and formatted like the server does, in the admin's language. It's
-  switched off when `format_inline_footer_value()` is overridden, since the
-  browser can't reproduce a custom format. With the `"filtered"` scope, a
-  row edited so that it no longer matches the filters keeps counting until
-  it's saved, since filtering is done by the server.
-- **Where they go:** on tabular inlines, a `<tfoot>` whose cells line up
-  with the column headers (found with the `column_header` selector); the
-  label spans the columns before the first value. On stacked inlines —
-  or when a column isn't a header — they stay as a summary line in the
-  footer ("Total: Pages 3250").
+- **The values' format**, in Python: numbers are localized (`1.234,5` in
+  Spanish), floats and decimals rounded to 2 decimals at most. Override
+  `format_inline_footer_value(column, value)` for currencies, units… (return
+  safe HTML for markup):
+
+  ```python
+  def format_inline_footer_value(self, column, value):
+      if column == "amount":
+          return format_html("{} <small>€</small>", floatformat(value, 2))
+      return super().format_inline_footer_value(column, value)
+  ```
+
+- **Which rows**, in Python: `get_inline_footer_rows(request, obj)` — e.g.
+  one row per VAT rate from your own model method.
+- **The markup**, in templates: the `<tfoot>` is
+  `django_admin_inline_controls/tfoot.html` (blocks `tfoot`, `tfoot_row`,
+  `tfoot_label`, `tfoot_cell`, `tfoot_value`), chosen per inline with
+  `inline_footer_tfoot_template`; the summary line is in `footer.html`
+  (blocks `footer_rows`, `footer_row`, `footer_cell`). Extend them and
+  override only the block you need:
+
+  ```django
+  {% extends "django_admin_inline_controls/tfoot.html" %}
+  {% block tfoot_value %}<strong>{{ slot.cell.value }}</strong>{% endblock %}
+  ```
+
+#### Using the values from your own JS
+
+Every value is in the HTML the server renders, with its raw number, for
+your scripts to read — nothing to call:
+
+| Attribute / selector | What it is |
+|---|---|
+| `[data-footer-key="<row index>:<column>"]` | A value's element (in the `<tfoot>` or the summary). |
+| `data-footer-row`, `data-column` | Its row label and column. |
+| `data-value` | Its number as plain digits (`"1234.5"`), `""` when it isn't a number; the element's text is the formatted value. |
+
+```js
+const total = document.querySelector(
+    '#books-inline-controls [data-footer-row="Total"][data-column="pages"]',
+);
+Number(total.dataset.value); // 3250
+```
+
+When the inline is refreshed in place (filtering, paging, saving it,
+actions) the footer comes back re-rendered, and `inline-controls:updated`
+bubbles from the new content: read the values again there.
 
 ## Optional extras
 
@@ -495,7 +523,7 @@ you replace a block's markup (`{{ block.super }}` keeps the original).
 | `footer` | The whole footer. |
 | `footer_classes` | Extra classes (empty). |
 | `footer_start`, `footer_end` | Empty slots at both ends. |
-| `footer_rows`, `footer_row`, `footer_cell` | The footer rows' summary (`footer_row` once per row, with `row`; `footer_cell` once per value, with `cell`). Tabular inlines turn it into a `<tfoot>`. |
+| `footer_rows`, `footer_row`, `footer_cell` | The footer rows' summary line (`footer_row` once per row, with `row`; `footer_cell` once per value, with `cell`), when they aren't in the table's `<tfoot>`. |
 | `pagination` | Page links or the infinite-scroll status. |
 | `page_links`, `page_link` | The page links (`page_link` once per link, with `link`). |
 | `result_count` | "25 results". |
@@ -586,7 +614,7 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E014` | An `inline_footer_rows` column is not a field of the model or of the inline. |
 | `admin_inline_controls.E015` | `inline_footer_scope` is not `"filtered"` or `"page"`. |
 | `admin_inline_controls.E016` | `inline_footer_scope = "page"` with infinite scroll. |
-| `admin_inline_controls.E017` | `inline_footer_live` is not `True` or `False`. |
+| `admin_inline_controls.E017` | `inline_footer_tfoot` is not `True` or `False`. |
 | `admin_inline_controls.E101` | `inline_pagination = "infinite"` on a nested_admin inline. |
 | `admin_inline_controls.E102` | `inline_save_button = True` on a nested_admin inline. |
 | `admin_inline_controls.E103` | `inline_actions` on a nested_admin inline. |
@@ -595,7 +623,9 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 
 After an inline is refreshed in place, or rows are appended, an
 `inline-controls:updated` event bubbles from the new content: hook your own
-widget initialization there. Before the toolbar and footer are placed, a
+widget initialization there (or read the footer values again, see
+[Using the values from your own JS](#using-the-values-from-your-own-js)).
+Before the toolbar and footer are placed, a
 cancelable `inline-controls:place` event bubbles from the controls'
 wrapper (see [Adapting to another admin markup](#adapting-to-another-admin-markup)). The admin's own inline machinery, autocomplete,
 date/time shortcuts and `filter_horizontal` widgets are re-initialized
