@@ -527,3 +527,129 @@ describe("renderFooterRows", () => {
         ).toHaveLength(1);
     });
 });
+
+describe("parseNumber", () => {
+    const es = { decimal: ",", thousands: ".", grouping: true, language: "es" };
+
+    it("reads localized text inputs", () => {
+        expect(api.parseNumber("1.234,5", "text", es)).toBe(1234.5);
+        expect(api.parseNumber(" 7 ", "text", es)).toBe(7);
+    });
+
+    it("reads number inputs with a dot, whatever the language", () => {
+        expect(api.parseNumber("1234.5", "number", es)).toBe(1234.5);
+    });
+
+    it("returns null for empty or invalid input", () => {
+        expect(api.parseNumber("", "number", es)).toBeNull();
+        expect(api.parseNumber("abc", "text", es)).toBeNull();
+    });
+});
+
+describe("updateFooterLive", () => {
+    const setupLive = () => {
+        document.body.innerHTML = `
+            <div class="inline-controls" id="books-inline-controls">
+              <div id="books-group">
+                <table><tbody>
+                  <tr id="books-0" class="form-row has_original">
+                    <td><input type="number" name="books-0-pages" value="100"></td>
+                    <td><input type="checkbox" name="books-0-DELETE"></td>
+                  </tr>
+                  <tr id="books-1" class="form-row has_original">
+                    <td><input type="number" name="books-1-pages" value="300"></td>
+                    <td><input type="checkbox" name="books-1-DELETE"></td>
+                  </tr>
+                  <tr id="books-2" class="form-row">
+                    <td><input type="number" name="books-2-pages" value=""></td>
+                  </tr>
+                </tbody></table>
+              </div>
+              <div data-inline-controls-footer-rows>
+                <span data-footer-key="0:pages" data-live='{"fn": "sum", "field": "pages", "base": 1000}'>
+                  <span class="inline-controls-footer-value">1000</span></span>
+                <span data-footer-key="0:title" data-live='{"fn": "count", "field": null, "base": 10}'>
+                  <span class="inline-controls-footer-value">10</span></span>
+                <span data-footer-key="1:pages" data-live='{"fn": "avg", "field": "pages", "sum": 1000, "count": 10}'>
+                  <span class="inline-controls-footer-value">100</span></span>
+                <span data-footer-key="2:pages" data-live="null">
+                  <span class="inline-controls-footer-value">300</span></span>
+              </div>
+            </div>`;
+        return document.getElementById("books-inline-controls");
+    };
+    const liveConfig = config({
+        footerLive: true,
+        numberFormat: {
+            decimal: ".",
+            thousands: ",",
+            grouping: false,
+            language: "en",
+        },
+        messages: {
+            ...config().messages,
+            footerLive: "Includes unsaved changes",
+            footerStale: "Saved value",
+        },
+    });
+    const values = (root) =>
+        [...root.querySelectorAll(".inline-controls-footer-value")].map((el) =>
+            el.textContent.trim(),
+        );
+
+    it("leaves the server's values alone without changes", () => {
+        const root = setupLive();
+        api.updateFooterLive(root, liveConfig);
+
+        expect(values(root)).toEqual(["1000", "10", "100", "300"]);
+        expect(root.querySelector(".inline-controls-footer-live")).toBeNull();
+    });
+
+    it("corrects sums, counts and averages with the edits", () => {
+        const root = setupLive();
+        root.querySelector("[name='books-0-pages']").value = "150"; // +50
+        root.querySelector("[name='books-1-DELETE']").checked = true; // -300, -1
+        root.querySelector("[name='books-2-pages']").value = "20"; // new row: +20, +1
+        api.updateFooterLive(root, liveConfig);
+
+        // sum 1000 + 50 - 300 + 20; count 10 - 1 + 1; avg 770 / 10.
+        expect(values(root)).toEqual(["770", "10", "77", "300"]);
+        const sum = root.querySelector(
+            "[data-footer-key='0:pages'] .inline-controls-footer-value",
+        );
+        expect(sum.classList.contains("inline-controls-footer-live")).toBe(
+            true,
+        );
+        expect(sum.title).toBe("Includes unsaved changes");
+        // The Max-like value can't be recomputed: marked as the saved value.
+        const stale = root.querySelector(
+            "[data-footer-key='2:pages'] .inline-controls-footer-value",
+        );
+        expect(stale.classList.contains("inline-controls-footer-stale")).toBe(
+            true,
+        );
+        expect(stale.title).toBe("Saved value");
+    });
+
+    it("restores the server's values when the edits are undone", () => {
+        const root = setupLive();
+        const input = root.querySelector("[name='books-0-pages']");
+        input.value = "150";
+        api.updateFooterLive(root, liveConfig);
+        input.value = "100";
+        api.updateFooterLive(root, liveConfig);
+
+        expect(values(root)).toEqual(["1000", "10", "100", "300"]);
+        expect(root.querySelector("[title]")).toBeNull();
+    });
+
+    it("is null when the field isn't an input of the rows", () => {
+        const root = setupLive();
+        root.querySelector("[data-footer-key='0:pages']").dataset.live =
+            '{"fn": "sum", "field": "missing", "base": 1}';
+        root.querySelector("[name='books-0-pages']").value = "150";
+        api.updateFooterLive(root, liveConfig);
+
+        expect(values(root)[0]).toBe("1000");
+    });
+});

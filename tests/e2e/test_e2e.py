@@ -440,3 +440,31 @@ def test_stacked_inline_shows_the_footer_summary(change_page: Page):
 
     expect(summary).to_be_visible()
     expect(summary).to_contain_text("3250")
+
+
+def test_live_footer_follows_unsaved_edits(change_page: Page, author):
+    page = change_page
+    total = page.locator("#books-group tfoot [data-footer-key='0:pages']")
+    expect(total).to_have_text("3250")
+
+    page.fill("input[name='books-0-pages']", "110")  # was 10
+    expect(total).to_have_text("3350")
+    expect(total).to_have_class(re.compile(r"\binline-controls-footer-live\b"))
+
+    page.check("input[name='books-1-DELETE']")  # 20 pages
+    expect(total).to_have_text("3330")
+    expect(page.locator("#books-group tfoot [data-footer-key='0:title']")).to_have_text(
+        "24"
+    )
+
+    # Saving the inline brings back the server's (now real) values.
+    page.click("#books-inline-controls [data-inline-controls-save]")
+    expect(
+        page.locator(
+            "#books-inline-controls .inline-controls-save .inline-controls-status"
+        )
+    ).to_have_text("Saved.")
+    total = page.locator("#books-group tfoot [data-footer-key='0:pages']")
+    expect(total).to_have_text("3330")
+    expect(total).not_to_have_class(re.compile(r"\binline-controls-footer-live\b"))
+    assert Book.objects.filter(author=author).count() == 24

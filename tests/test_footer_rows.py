@@ -1,16 +1,18 @@
+import json
 from decimal import Decimal
 
 import pytest
+from demo.models import Author, Book
 from django.contrib import admin
 from django.db import connection
-from django.db.models import Avg, Count, Max, Sum
+from django.db.models import Avg, Count, F, Max, Q, Sum
 from django.test import RequestFactory
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import translation
 from django.utils.html import format_html
 
-from demo.models import Author, Book
+from django_admin_inline_controls.controls import live_footer_spec
 from django_admin_inline_controls.mixins import InlineControlsMixin
 
 
@@ -82,8 +84,9 @@ def test_all_aggregates_run_in_one_query(get_request, author):
     )
     state = controls(inline, get_request(), author)
     with CaptureQueriesContext(connection) as queries:
-        state.footer_rows
+        rows = state.footer_rows
 
+    assert len(rows) == 2
     assert len(queries) == 1
 
 
@@ -204,3 +207,124 @@ def test_valid_footer_configuration():
     )
 
     assert not [e for e in inline.check() if e.id.startswith("admin_inline_controls")]
+
+
+# Live footer ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (Sum("pages"), {"fn": "sum", "field": "pages"}),
+        (Avg("pages"), {"fn": "avg", "field": "pages"}),
+        (Count("pk"), {"fn": "count", "field": None}),
+        (Count("*"), {"fn": "count", "field": None}),
+        (Count("published"), {"fn": "count", "field": "published"}),
+        (Max("pages"), None),
+        (Sum("pages", filter=Q(featured=True)), None),
+        (Count("pages", distinct=True), None),
+        (Sum("author__id"), None),
+        (Sum(F("pages") * 2), None),
+        (lambda queryset: 1, None),
+        (42, None),
+    ],
+)
+def test_live_spec(value, expected):
+    assert live_footer_spec(value) == expected
+
+
+def live_cells(state):
+    return {
+        (row.label, cell.column): cell.live
+        for row in state.footer_rows
+        for cell in row.cells
+    }
+
+
+def test_live_bases(get_request, author):
+    inline = make_inline(
+        inline_footer_live=True,
+        inline_footer_rows=[
+            ("Total", {"title": Count("pk"), "pages": Sum("pages")}),
+            ("Average", {"pages": Avg("pages")}),
+            ("Max", {"pages": Max("pages")}),
+        ],
+    )
+    state = controls(inline, get_request(), author)
+    with CaptureQueriesContext(connection) as queries:
+        cells_ = live_cells(state)
+
+    assert len(queries) == 1  # the average's sum and count come in the same query
+    assert cells_ == {
+        ("Total", "title"): {"fn": "count", "field": None, "base": 25},
+        ("Total", "pages"): {"fn": "sum", "field": "pages", "base": 3250},
+        ("Average", "pages"): {"fn": "avg", "field": "pages", "sum": 3250, "count": 25},
+        ("Max", "pages"): None,
+    }
+    config = json.loads(state.config_json)
+    assert config["footerLive"] is True
+    assert config["numberFormat"] == {
+        "language": "en-us",
+        "decimal": ".",
+        "thousands": ",",
+        "grouping": False,
+    }
+
+
+def test_live_is_off_by_default_and_with_a_format_hook(get_request, author):
+    rows = [("Total", {"pages": Sum("pages")})]
+
+    class Formatted(InlineControlsMixin, admin.TabularInline):
+        model = Book
+        inline_footer_rows = rows
+        inline_footer_live = True
+
+        def format_inline_footer_value(self, column, value):
+            return f"{value} p."
+
+    off = controls(make_inline(inline_footer_rows=rows), get_request(), author)
+    formatted = controls(Formatted(Author, admin.site), get_request(), author)
+
+    for state in (off, formatted):
+        assert live_cells(state) == {("Total", "pages"): None}
+        assert json.loads(state.config_json)["footerLive"] is False
+
+
+def test_live_number_format_follows_the_language(get_request, author):
+    inline = make_inline(
+        inline_footer_live=True, inline_footer_rows=[("T", {"pages": Sum("pages")})]
+    )
+    with translation.override("es"):
+        config = json.loads(controls(inline, get_request(), author).config_json)
+
+    assert config["numberFormat"]["language"] == "es"
+    assert config["numberFormat"]["decimal"] == ","
+    assert config["messages"]["footerLive"] == "Incluye cambios sin guardar"
+
+
+def test_live_spec_is_rendered_for_the_js(admin_client, author):
+    url = reverse("admin:demo_author_change", args=[author.pk])
+    html = admin_client.get(url).content.decode()
+
+    assert 'data-footer-key="0:pages"' in html
+    assert "&quot;fn&quot;: &quot;sum&quot;" in html
+
+
+def test_check_live_type():
+    ids = [e.id for e in make_inline(inline_footer_live="yes").check()]
+
+    assert "admin_inline_controls.E017" in ids
+
+
+def test_live_bases_of_an_empty_selection(get_request, author):
+    inline = make_inline(
+        inline_footer_live=True,
+        inline_filter_fields=["title__icontains"],
+        inline_footer_rows=[("T", {"pages": Sum("pages"), "title": Avg("pages")})],
+    )
+    request = get_request({"books-f-title__icontains": "nothing matches"})
+
+    assert live_cells(controls(inline, request, author)) == {
+        ("T", "pages"): {"fn": "sum", "field": "pages", "base": 0},
+        ("T", "title"): {"fn": "avg", "field": "pages", "sum": 0, "count": 0},
+    }

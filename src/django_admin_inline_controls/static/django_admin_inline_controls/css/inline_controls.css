@@ -281,3 +281,11 @@ th.inline-controls-sortable .inline-controls-sort-toggle {
 .inline-group table tfoot.inline-controls-tfoot .inline-controls-footer-value {
     font-weight: bold;
 }
+
+.inline-controls-footer-live {
+    color: var(--message-warning-fg, #b35900);
+}
+
+.inline-controls-footer-stale {
+    opacity: 0.55;
+}

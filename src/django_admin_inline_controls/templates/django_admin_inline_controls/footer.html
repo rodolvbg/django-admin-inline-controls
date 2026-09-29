@@ -19,7 +19,7 @@
                   <span class="inline-controls-footer-label">{{ row.label }}:</span>
                   {% for cell in row.cells %}
                     {% block footer_cell %}
-                      <span class="inline-controls-footer-cell" data-column="{{ cell.column }}">
+                      <span class="inline-controls-footer-cell" data-column="{{ cell.column }}" data-footer-key="{{ forloop.parentloop.counter0 }}:{{ cell.column }}" data-live="{{ cell.live_json }}">
                         <span class="inline-controls-footer-column">{{ cell.column_label }}</span>
                         <span class="inline-controls-footer-value">{{ cell.value }}</span>
                       </span>

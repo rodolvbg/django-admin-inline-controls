@@ -91,6 +91,7 @@ shareable and several inlines never clash.
 | `inline_actions` | `()` | Actions for the selected rows. See [Inline actions](#inline-actions). |
 | `inline_footer_rows` | `()` | Rows of totals, averages… below the table. See [Footer rows](#footer-rows). |
 | `inline_footer_scope` | `"filtered"` | What the footer rows add up: `"filtered"` or `"page"`. |
+| `inline_footer_live` | `False` | Recompute `Sum` / `Count` / `Avg` footer values while rows are edited. |
 
 Only columns declared in `inline_ordering_fields` can be sorted: ordering
 by an arbitrary field from the URL would let anyone infer the values of
@@ -331,14 +332,36 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
     every page. With infinite scroll it doesn't depend on what is loaded.
   - `"page"`: the rows shown (not available with infinite scroll,
     `admin_inline_controls.E016`).
-- Values come from the **database**: unsaved edits aren't counted. The
-  rows follow filtering, sorting, paging, saving the inline and actions,
-  since they arrive with the refreshed inline.
+- Values come from the **database**. The rows follow filtering, sorting,
+  paging, saving the inline and actions, since they arrive with the
+  refreshed inline. For unsaved edits, see live values below.
 - **Formatting:** numbers are localized (`1.234,5` in Spanish), floats and
   decimals rounded to 2 decimals at most. Override
   `format_inline_footer_value(column, value)` for currencies, units…
   (return safe HTML for markup), or `get_inline_footer_rows(request, obj)`
   for dynamic rows.
+- **Live values** — `inline_footer_live = True` recomputes values in the
+  browser as rows are edited, added or marked for deletion, highlighted
+  with an "Includes unsaved changes" tooltip until the inline is saved or
+  refreshed. The server's value is corrected by the difference between
+  each shown row's current and saved value (its input's `defaultValue`),
+  so it also works with the `"filtered"` scope, rows on other pages
+  included:
+
+  | Aggregate | Live? |
+  |---|---|
+  | `Sum("field")` | ✅ sum of the differences |
+  | `Count("pk")`, `Count("*")` | ✅ new rows with content +1, rows marked for deletion −1 |
+  | `Count("field")`, `Avg("field")` | ✅ from the sum and count of non-empty values (fetched in the same query) |
+  | `Max`, `Min`, `filter=`, `distinct=True`, expressions (`F("a") * F("b")`), related fields, callables, constants | ❌ kept, and dimmed as "Saved value" while there are unsaved changes |
+
+  The field must be an input of the rows (read-only fields can't change
+  anyway). Numbers are read as typed — localized text inputs included —
+  and formatted like the server does, in the admin's language. It's
+  switched off when `format_inline_footer_value()` is overridden, since the
+  browser can't reproduce a custom format. With the `"filtered"` scope, a
+  row edited so that it no longer matches the filters keeps counting until
+  it's saved, since filtering is done by the server.
 - **Where they go:** on tabular inlines, a `<tfoot>` whose cells line up
   with the column headers (found with the `column_header` selector); the
   label spans the columns before the first value. On stacked inlines —
@@ -563,6 +586,7 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E014` | An `inline_footer_rows` column is not a field of the model or of the inline. |
 | `admin_inline_controls.E015` | `inline_footer_scope` is not `"filtered"` or `"page"`. |
 | `admin_inline_controls.E016` | `inline_footer_scope = "page"` with infinite scroll. |
+| `admin_inline_controls.E017` | `inline_footer_live` is not `True` or `False`. |
 | `admin_inline_controls.E101` | `inline_pagination = "infinite"` on a nested_admin inline. |
 | `admin_inline_controls.E102` | `inline_save_button = True` on a nested_admin inline. |
 | `admin_inline_controls.E103` | `inline_actions` on a nested_admin inline. |
