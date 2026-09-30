@@ -16,10 +16,10 @@
             return [];
         }
         return core
-            .formRows(group, config.prefix)
-            .filter((row) => row.classList.contains("has_original"))
+            .formRows(group, config.prefix, config)
+            .filter((row) => core.isSaved(row, config))
             .map((row) => {
-                const index = row.id.slice(config.prefix.length + 1);
+                const index = core.formIndex(row, config.prefix);
                 const input = row.querySelector(
                     `[name="${config.prefix}-${index}-${config.pkName}"]`,
                 );

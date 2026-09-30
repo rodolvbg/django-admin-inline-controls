@@ -39,7 +39,8 @@ FOOTER_PAGE = "page"
 #: Where the JS finds things in the admin's inline markup. Override per inline
 #: with ``inline_controls_selectors`` for themes or inline templates with a
 #: different structure. Each value is one selector or a list tried in order;
-#: ``{name}`` (a column) and ``{group}`` (``#<prefix>-group``) are filled in.
+#: ``{name}`` (a column), ``{group}`` (``#<prefix>-group``) and ``{prefix}``
+#: are filled in.
 DEFAULT_SELECTORS: dict[str, list[str]] = {
     # Element the toolbar and footer are moved into, inside the inline.
     "container": [".inline-group fieldset"],
@@ -51,6 +52,12 @@ DEFAULT_SELECTORS: dict[str, list[str]] = {
     "table_head": [".inline-group table thead"],
     # Header of a sortable column, inside the table head.
     "column_header": ["th.column-{name}"],
+    # Inside the inline group: each form's container (``{prefix}``: the
+    # formset's). Its index comes from its id (``<prefix>-<n>``) or, if it
+    # has none, from its fields' names.
+    "form_rows": ["[id]"],
+    # A form row of a saved object (not a new one) matches this.
+    "saved_row": [".has_original"],
     # Inside a saved row: where its action checkbox goes.
     "row_label": [":scope > td.original > p", ":scope > h3", ":scope > td.original"],
     # jQuery selectors of the rows Django's inlines.js manages (re-run after
@@ -470,11 +477,14 @@ class InlineControls:
         unless they were rendered in the table's <tfoot>."""
         return [] if self.tfoot_rendered else self.footer_rows
 
-    def tfoot_rows(self, columns: list[str], width: int = 0) -> list[TfootRow] | None:
-        """The footer rows laid out under ``columns`` (the table's visible
-        columns, after its leading "original" one) in a table ``width``
-        columns wide, or ``None`` if a value's column isn't among them."""
-        positions = {name: index + 1 for index, name in enumerate(columns)}
+    def tfoot_rows(
+        self, positions: dict[str, int], width: int = 0
+    ) -> list[TfootRow] | None:
+        """The footer rows laid out in a table ``width`` columns wide whose
+        field columns are at ``positions`` (0-based), or ``None`` if a
+        value's column isn't among them."""
+        # Columns before the first field's (Django's narrow "original" one).
+        leading = min(positions.values(), default=0)
         rows = []
         for index, row in enumerate(self.footer_rows):
             if any(cell.column not in positions for cell in row.cells):
@@ -483,12 +493,12 @@ class InlineControls:
             if not by_position:
                 continue
             first, last = min(by_position), max(by_position)
-            # The narrow "original" column alone doesn't fit the label: it
-            # spans the empty columns before the first value, or goes into
-            # that value's cell.
-            label_colspan = first if first >= 2 else 0
-            cells = [] if label_colspan else [TfootCell()]
-            for position in range(max(first, 1), last + 1):
+            # The leading columns alone (Django's narrow "original" one) don't
+            # fit the label: it spans the empty field columns before the
+            # first value too, or goes into that value's cell.
+            label_colspan = first if first > leading else 0
+            cells = [] if label_colspan else [TfootCell()] * first
+            for position in range(first, last + 1):
                 cell = by_position.get(position)
                 cells.append(
                     TfootCell(

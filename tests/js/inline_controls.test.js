@@ -8,6 +8,7 @@ beforeAll(async () => {
     await import(`${js}/core.js`);
     await import(`${js}/save.js`);
     await import(`${js}/actions.js`);
+    await import(`${js}/contrib/unfold.js`);
     api = globalThis.DjangoAdminInlineControls;
 });
 
@@ -500,5 +501,141 @@ describe("register", () => {
             new Event("input", { bubbles: true }),
         );
         expect(api.stateOf(root).dirty).toBe(true);
+    });
+});
+
+describe("Unfold markup", () => {
+    // Mirrors UNFOLD_SELECTORS in contrib/unfold.py.
+    const unfold = (overrides = {}) =>
+        config({
+            selectors: {
+                ...config().selectors,
+                container: [
+                    "[data-inline-type] > fieldset",
+                    "[data-inline-type] > .inline-related > fieldset",
+                ],
+                table_head: ["table thead"],
+                form_rows: ['[id="{prefix}-data"] > .form-group'],
+                saved_row: [".original"],
+                row_label: [
+                    ':scope > tr > td > p[class~="group/title"]',
+                    ":scope > tr.form-row > td",
+                ],
+            },
+            ...overrides,
+        });
+
+    const render = () => {
+        document.body.innerHTML = `
+            <form>
+              <div class="inline-controls" id="books-inline-controls">
+                <div class="inline-controls-toolbar"><div class="inline-controls-actions">
+                  <span data-inline-controls-selection></span>
+                </div></div>
+                <div id="books-group" data-inline-type="tabular">
+                  <div class="tabular inline-related"><fieldset class="module">
+                    <h2>Books</h2>
+                    <table id="books-data">
+                      <thead><tr><th class="column-title"><span><span>Title</span></span></th></tr></thead>
+                      <tbody class="form-group original">
+                        <tr><td><p class="group/title flex">Book 7</p></td></tr>
+                        <tr class="form-row"><td><input type="hidden" name="books-0-id" value="7"><input name="books-0-title"></td></tr>
+                      </tbody>
+                      <tbody class="form-group template">
+                        <tr class="form-row"><td><input name="books-1-title"></td></tr>
+                      </tbody>
+                      <tbody class="form-group template empty-form">
+                        <tr class="form-row"><td><input name="books-__prefix__-title"></td></tr>
+                      </tbody>
+                    </table>
+                  </fieldset></div>
+                </div>
+              </div>
+            </form>`;
+        return document.getElementById("books-inline-controls");
+    };
+
+    it("finds the forms by their fields' names", () => {
+        const root = render();
+        const group = document.getElementById("books-group");
+        const rows = api.formRows(group, "books", unfold());
+
+        expect(rows).toHaveLength(3);
+        expect(rows.map((row) => api.formIndex(row, "books"))).toEqual([
+            0,
+            1,
+            null,
+        ]);
+        expect(rows.map((row) => api.isSaved(row, unfold()))).toEqual([
+            true,
+            false,
+            false,
+        ]);
+        // Without form_rows, only ids count.
+        expect(api.formRows(group, "books", config())).toEqual([]);
+        expect(root).not.toBeNull();
+    });
+
+    it("places the toolbar, sort links and checkboxes", () => {
+        const root = render();
+        root.dataset.inlineControls = JSON.stringify(
+            unfold({
+                ordering: [
+                    {
+                        name: "title",
+                        direction: "",
+                        priority: 0,
+                        toggleUrl: "?books-o=title",
+                        removeUrl: "",
+                    },
+                ],
+                actionUrl: "/action/",
+                actionsFormId: "books-inline-controls-actions",
+                actions: [],
+                pkName: "id",
+                messages: {
+                    ...config().messages,
+                    selected: "%(sel)s of %(cnt)s selected",
+                    selectAll: "",
+                    allSelected: "",
+                },
+            }),
+        );
+        api.setup(root);
+
+        const heading = root.querySelector("fieldset > h2");
+        expect(heading.nextElementSibling.className).toBe(
+            "inline-controls-toolbar",
+        );
+        const link = root.querySelector("th.column-title > a");
+        expect(link.textContent).toBe("Title");
+        expect(link.firstElementChild.tagName).toBe("SPAN");
+        const box = root.querySelector(".inline-controls-select");
+        expect(box.value).toBe("7");
+        expect(box.parentElement.textContent).toBe("Book 7");
+        expect(root.querySelectorAll(".inline-controls-select")).toHaveLength(
+            1,
+        );
+    });
+
+    it("re-binds Unfold's add and delete buttons after an update", () => {
+        document.body.innerHTML = `
+            <div id="fresh"><a class="add-row"></a><a class="delete-template"></a></div>`;
+        const calls = [];
+        window.addInlineTemplateHandler = () => calls.push("add");
+        window.deleteInlineTemplateHandler = () => calls.push("delete");
+        const fresh = document.getElementById("fresh");
+        fresh.dispatchEvent(
+            new CustomEvent("inline-controls:updated", { bubbles: true }),
+        );
+        fresh.dispatchEvent(
+            new CustomEvent("inline-controls:updated", { bubbles: true }),
+        );
+        fresh.querySelector(".add-row").click();
+        fresh.querySelector(".delete-template").click();
+
+        expect(calls).toEqual(["add", "delete"]);
+        delete window.addInlineTemplateHandler;
+        delete window.deleteInlineTemplateHandler;
     });
 });

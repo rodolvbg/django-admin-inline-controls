@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from typing import Any
 
 from django import template
 from django.utils.safestring import SafeString, mark_safe
@@ -11,31 +10,26 @@ from django.utils.safestring import SafeString, mark_safe
 register = template.Library()
 
 
-def _visible_columns(inline_admin_formset: Any) -> list[str]:
-    """Names of the table's columns after "original", in order: the fields
-    Django's tabular template shows (hidden widgets have no visible column)."""
-    columns = []
-    for field in inline_admin_formset.fields():
-        widget = field["widget"]
-        hidden = (
-            widget.get("is_hidden") if isinstance(widget, dict) else widget.is_hidden
-        )
-        if not hidden:
-            columns.append(field["name"])
-    return columns
-
-
-def _header_width(html: str) -> int:
-    """Columns of the table's header row, as rendered (it varies with the
-    Django version, the theme and the delete permission)."""
+def _header_columns(html: str) -> tuple[dict[str, int], int]:
+    """Position of each field's column in the table's header row (its
+    ``th.column-<name>``), and the row's width, as rendered: the leading
+    columns (Django's narrow "original" one) and the trailing ones vary with
+    the Django version, the theme and the delete permission. Hidden headers
+    take no room."""
     head = re.search(r"<thead.*?</thead>", html, re.S)
-    if not head:
-        return 0
-    total = 0
-    for attrs in re.findall(r"<th\b([^>]*)>", head.group()):
+    positions: dict[str, int] = {}
+    width = 0
+    for attrs in re.findall(r"<th\b([^>]*)>", head.group() if head else ""):
+        classes = re.search(r'class="([^"]*)"', attrs)
+        names = classes.group(1).split() if classes else []
+        if "hidden" in names:
+            continue
+        for name in names:
+            if name.startswith("column-"):
+                positions.setdefault(name.removeprefix("column-"), width)
         span = re.search(r'colspan="(\d+)"', attrs)
-        total += int(span.group(1)) if span else 1
-    return total
+        width += int(span.group(1)) if span else 1
+    return positions, width
 
 
 @register.simple_tag(takes_context=True)
@@ -51,12 +45,10 @@ def inline_controls_render_inline(
     formset = context["inline_admin_formset"]
     if not controls or not controls.footer_rows or not formset.opts.inline_footer_tfoot:
         return mark_safe(html)
+    # Last in the table: if it has its own <tfoot> (Unfold's "Add another"),
+    # that one stays the table's footer and these rows show above it.
     position = html.rfind("</table>")
-    rows = (
-        controls.tfoot_rows(_visible_columns(formset), _header_width(html))
-        if position != -1
-        else None
-    )
+    rows = controls.tfoot_rows(*_header_columns(html)) if position != -1 else None
     if not rows:
         return mark_safe(html)
     with context.push(tfoot_rows=rows):

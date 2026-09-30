@@ -12,6 +12,7 @@ from django.test import RequestFactory
     [
         ("django_admin_inline_controls.contrib.filters", "django_filters", "filters"),
         ("django_admin_inline_controls.contrib.nested", "nested_admin", "nested"),
+        ("django_admin_inline_controls.contrib.unfold", "unfold", "unfold"),
     ],
 )
 def test_contrib_import_without_extra_raises_helpful_error(
@@ -140,3 +141,52 @@ def test_nested_mixin_renders_in_nested_admin(admin_client, author):
     assert response.status_code == 200
     assert b'id="books-inline-controls"' in response.content
     assert b"&quot;ajax&quot;: false" in response.content
+
+
+# django-unfold ---------------------------------------------------------------
+
+
+@pytest.fixture
+def unfold_mixin():
+    pytest.importorskip("unfold")
+    from django_admin_inline_controls.contrib.unfold import UnfoldInlineControlsMixin
+
+    return UnfoldInlineControlsMixin
+
+
+def unfold_inline(mixin, **attrs):
+    inline_class = type(
+        "BookInline", (mixin, admin.TabularInline), {"model": Book, **attrs}
+    )
+    return inline_class(Author, admin.AdminSite(name="unfold_site"))
+
+
+def test_unfold_selectors_under_the_inline_own(unfold_mixin, get_request):
+    from django_admin_inline_controls.contrib.unfold import UNFOLD_SELECTORS
+    from django_admin_inline_controls.controls import DEFAULT_SELECTORS
+
+    inline = unfold_inline(
+        unfold_mixin, inline_controls_selectors={"row_label": ".mine"}
+    )
+    selectors = inline.get_inline_controls_selectors(get_request(), None)
+
+    assert selectors["form_rows"] == UNFOLD_SELECTORS["form_rows"]
+    assert selectors["saved_row"] == [".original"]
+    assert selectors["row_label"] == [".mine"]
+    assert selectors["heading"] == DEFAULT_SELECTORS["heading"]
+
+
+def test_unfold_media(unfold_mixin):
+    media = str(unfold_inline(unfold_mixin, inline_actions=["delete_selected"]).media)
+
+    for path in ["js/core.js", "js/actions.js", "js/contrib/unfold.js"]:
+        assert f"django_admin_inline_controls/{path}" in media
+    assert "css/core.css" in media
+    assert "css/contrib/unfold.css" in media
+
+
+def test_unfold_per_page_is_an_error(unfold_mixin):
+    ids = lambda inline: [error.id for error in inline.check()]  # noqa: E731
+
+    assert "admin_inline_controls.E104" in ids(unfold_inline(unfold_mixin, per_page=10))
+    assert "admin_inline_controls.E104" not in ids(unfold_inline(unfold_mixin))

@@ -445,6 +445,11 @@ sorting and page links reload the page instead of swapping the inline, and
 infinite scroll, the save-inline button and inline actions are not
 available.
 
+### Themes
+
+- [django-unfold](docs/themes/unfold.md): `UnfoldInlineControlsMixin` (the
+  `unfold` extra).
+
 ## Customizing templates
 
 Three templates render the controls around the inline's own `template`
@@ -552,6 +557,8 @@ with `inline_controls_selectors`, merged over these defaults
 | `footer_parent` | `:scope > details` | Inside `container`: the footer is appended here, else to `container`. |
 | `table_head` | `.inline-group table thead` | The header row with the sortable columns. |
 | `column_header` | `th.column-{name}` | A sortable column's header (`{name}`: the column). |
+| `form_rows` | `[id]` | Inside the inline group: each form's container (`{prefix}`: the formset's). Its index comes from its id (`<prefix>-<n>`) or, without one, from its fields' names. |
+| `saved_row` | `.has_original` | A form container of a saved object (not a new one). |
 | `row_label` | `:scope > td.original > p`, `:scope > h3`, `:scope > td.original` | Inside a saved row: where its action checkbox goes. |
 | `tabular_rows` | `{group} .tabular.inline-related tbody:first > tr.form-row` | jQuery selector of the rows Django's `inlines.js` manages, re-initialized after a refresh (`{group}`: `#<prefix>-group`). |
 | `stacked_rows` | `{group} .inline-related` | The same for stacked inlines. |
@@ -577,9 +584,11 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
 For a whole theme, set it on a base inline class of your own. When
 something isn't found, the controls degrade instead of breaking: sort links
 stay in the toolbar if a column header is missing, checkboxes go into the
-row itself, and the toolbar and footer stay around the inline. Row ids
-(`<prefix>-<n>`) and the management form come from Django's formset, so
-they are never configured.
+row itself, and the toolbar and footer stay around the inline. The
+management form and the fields' names come from Django's formset, so they
+are never configured. On tabular inlines, the footer rows are laid out
+under the header cells with the `column-<field>` class, whatever columns
+come before or after them.
 
 To place the toolbar and footer yourself, listen for
 `inline-controls:place` (it bubbles from the controls' wrapper,
@@ -620,14 +629,15 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E101` | `inline_pagination = "infinite"` on a nested_admin inline. |
 | `admin_inline_controls.E102` | `inline_save_button = True` on a nested_admin inline. |
 | `admin_inline_controls.E103` | `inline_actions` on a nested_admin inline. |
+| `admin_inline_controls.E104` | Unfold's `per_page` on an inline with `UnfoldInlineControlsMixin`. |
 
 ## JavaScript files
 
 Each inline loads only the scripts it uses, through its `media`: `core.js`
 (pagination, filters, sorting, placing the controls) always, `save.js`
-with `inline_save_button` and `actions.js` with `inline_actions`. The admin
-merges the media of every inline on the page, so each file loads at most
-once.
+with `inline_save_button`, `actions.js` with `inline_actions` and
+`contrib/unfold.js` with `UnfoldInlineControlsMixin`. The admin merges the
+media of every inline on the page, so each file loads at most once.
 
 ## JavaScript events
 
@@ -648,6 +658,7 @@ cd example
 python manage.py migrate
 python manage.py seed_demo      # admin/admin + an author with many books
 python manage.py runserver
+
 ```
 
 ## Translations

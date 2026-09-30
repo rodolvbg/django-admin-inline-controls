@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Template blocks throughout the wrapper, toolbar, footer and response
   templates, and per-inline `inline_controls_toolbar_template` /
   `inline_controls_footer_template`, so they can be extended.
+- `contrib.unfold.UnfoldInlineControlsMixin` (`unfold` extra): the controls
+  in django-unfold's inlines, with its colors (light and dark); check
+  `admin_inline_controls.E104` for Unfold's own `per_page`.
+- `form_rows` / `saved_row` selectors, `{prefix}` in selectors, and footer
+  rows laid out from the header's `column-<field>` cells: markups without
+  row ids or Django's "original" column work too.
 - The JS is split per feature: the save button's and the actions' scripts
   load only for inlines that use them.
 - `inline_footer_rows` / `inline_footer_scope`: rows of totals, averages…

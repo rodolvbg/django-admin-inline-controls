@@ -251,14 +251,16 @@ from django_admin_inline_controls.controls import (  # noqa: E402
     InlineControls,
 )
 
+DJANGO = {"title": 1, "status": 2, "pages": 3}  # after th.original
 
-def layout(request, rows, columns, width=0):
+
+def layout(request, rows, positions, width=0):
     state = InlineControls(make_inline(), request, None, "books")
     state.__dict__["footer_rows"] = [
         FooterRow(label, [FooterCell(c, c, v, v) for c, v in cells.items()])
         for label, cells in rows
     ]
-    result = state.tfoot_rows(columns, width)
+    result = state.tfoot_rows(positions, width)
     if result is None:
         return None
     return [
@@ -276,16 +278,16 @@ def layout(request, rows, columns, width=0):
 
 
 def test_tfoot_label_spans_the_columns_before_the_first_value(get_request):
-    assert layout(
-        get_request(), [("Avg", {"pages": "5"})], ["title", "status", "pages"], 5
-    ) == [("Avg", 3, [("pages", "0:pages", False)], 1)]
+    assert layout(get_request(), [("Avg", {"pages": "5"})], DJANGO, 5) == [
+        ("Avg", 3, [("pages", "0:pages", False)], 1)
+    ]
 
 
 def test_tfoot_label_goes_into_the_first_column_value(get_request):
     assert layout(
         get_request(),
         [("Total", {"title": "9", "pages": "5"})],
-        ["title", "status", "pages"],
+        DJANGO,
         4,
     ) == [
         (
@@ -302,32 +304,85 @@ def test_tfoot_label_goes_into_the_first_column_value(get_request):
     ]
 
 
+def test_tfoot_without_leading_columns(get_request):
+    # Unfold: no "original" column, the first field's is the first one.
+    positions = {"title": 0, "status": 1, "pages": 2}
+    assert layout(get_request(), [("Sum", {"title": "9"})], positions, 4) == [
+        ("Sum", 0, [("title", "0:title", True)], 3)
+    ]
+    assert layout(get_request(), [("Sum", {"pages": "5"})], positions, 4) == [
+        ("Sum", 2, [("pages", "0:pages", False)], 1)
+    ]
+
+
 def test_tfoot_needs_every_value_column_in_the_table(get_request):
-    assert layout(get_request(), [("T", {"hidden": "1"})], ["title"]) is None
-    assert layout(get_request(), [("T", {})], ["title"]) == []
+    assert layout(get_request(), [("T", {"hidden": "1"})], {"title": 1}) is None
+    assert layout(get_request(), [("T", {})], {"title": 1}) == []
 
 
-def test_visible_columns_skip_hidden_widgets():
+def test_header_columns():
     from django_admin_inline_controls.templatetags.inline_controls import (
-        _header_width,
-        _visible_columns,
+        _header_columns,
     )
 
-    class HiddenWidget:
-        is_hidden = True
+    django = (
+        '<thead><tr><th class="original"></th>'
+        '<th class="column-title required">Title</th>'
+        '<th class="column-id hidden"></th>'
+        '<th class="column-pages" colspan="2">Pages</th><th>Delete?</th></tr></thead>'
+    )
+    assert _header_columns(django) == ({"title": 1, "pages": 2}, 5)
+    unfold = (
+        '<thead class="hidden"><tr><th class="column-title x">T</th><th></th></tr>'
+        "</thead>"
+    )
+    assert _header_columns(unfold) == ({"title": 0}, 2)
+    assert _header_columns("<table></table>") == ({}, 0)
 
-    class Visible:
-        is_hidden = False
+
+def test_tfoot_goes_after_the_table_own_tfoot():
+    from django.template import Context, Engine
+
+    from django_admin_inline_controls.templatetags import inline_controls
+
+    class Controls:
+        footer_rows = [FooterRow("Total", [FooterCell("title", "Title", "9", 9)])]
+        tfoot_rendered = False
+
+        def tfoot_rows(self, positions, width):
+            return InlineControls.tfoot_rows(self, positions, width)
+
+    class Opts:
+        inline_footer_tfoot = True
+        inline_footer_tfoot_template = "django_admin_inline_controls/tfoot.html"
 
     class FormSet:
-        def fields(self):
-            yield {"name": "id", "widget": HiddenWidget()}
-            yield {"name": "title", "widget": Visible()}
-            yield {"name": "computed", "widget": {"is_hidden": False}}  # read-only
+        opts = Opts()
 
-    assert _visible_columns(FormSet()) == ["title", "computed"]
-    assert _header_width('<thead><tr><th></th><th colspan="2">a</th></tr></thead>') == 3
-    assert _header_width("<table></table>") == 0
+    engine = Engine(
+        loaders=[
+            (
+                "django.template.loaders.locmem.Loader",
+                {
+                    "inner.html": (
+                        '<table><thead><tr><th class="column-title"></th></tr></thead>'
+                        '<tbody></tbody><tfoot class="own"></tfoot></table>'
+                    )
+                },
+            ),
+            "django.template.loaders.app_directories.Loader",
+        ],
+        libraries={"inline_controls": inline_controls.__name__},
+    )
+    template = engine.from_string(
+        '{% load inline_controls %}{% inline_controls_render_inline "inner.html" %}'
+    )
+    controls = Controls()
+    html = template.render(
+        Context({"controls": controls, "inline_admin_formset": FormSet()})
+    )
+    assert html.index('class="own"') < html.index("inline-controls-tfoot")
+    assert controls.tfoot_rendered
 
 
 def test_tfoot_can_be_turned_off(admin_client, author, settings):

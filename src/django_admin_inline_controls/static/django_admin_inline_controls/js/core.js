@@ -64,19 +64,45 @@
         }
     }
 
+    /**
+     * Index of a form row of `prefix`: a number, "empty" for the template
+     * of new rows, or undefined if `row` isn't one. Read from its id
+     * (`<prefix>-<n>`) or, without one, from its fields' names.
+     */
+    function rowIndex(row, prefix) {
+        const escaped = escapeRegExp(prefix);
+        if (row.id) {
+            return row.id.match(new RegExp(`^${escaped}-(\\d+|empty)$`))?.[1];
+        }
+        const pattern = new RegExp(`^${escaped}-(\\d+|__prefix__)-`);
+        for (const field of row.querySelectorAll("[name]")) {
+            const match = field.name.match(pattern);
+            if (match) {
+                return match[1] === "__prefix__" ? "empty" : match[1];
+            }
+        }
+        return undefined;
+    }
+
     /** Form containers (tabular rows / stacked blocks) of one formset. */
-    function formRows(group, prefix) {
-        const pattern = new RegExp(`^${escapeRegExp(prefix)}-(\\d+|empty)$`);
-        return [...group.querySelectorAll("[id]")].filter((el) =>
-            pattern.test(el.id),
-        );
+    function formRows(group, prefix, config = {}) {
+        const selectors = selectorsFor(config, "form_rows", { prefix });
+        return [
+            ...group.querySelectorAll(selectors.join(", ") || "[id]"),
+        ].filter((row) => rowIndex(row, prefix) !== undefined);
     }
 
     function formIndex(row, prefix) {
-        const match = row.id.match(
-            new RegExp(`^${escapeRegExp(prefix)}-(\\d+)$`),
-        );
-        return match ? Number.parseInt(match[1], 10) : null;
+        const index = rowIndex(row, prefix);
+        return index === undefined || index === "empty"
+            ? null
+            : Number.parseInt(index, 10);
+    }
+
+    /** Whether a form row holds a saved object (not a new one). */
+    function isSaved(row, config) {
+        const selectors = selectorsFor(config, "saved_row");
+        return row.matches(selectors.join(", ") || ".has_original");
     }
 
     /** URL for the current filter widget values of one inline. */
@@ -179,14 +205,17 @@
             link.className = "inline-controls-sort-toggle";
             link.title = config.messages.sortToggle;
             link.dataset.inlineControlsNav = "";
-            for (const node of [...th.childNodes]) {
-                if (
-                    node.nodeType === Node.TEXT_NODE &&
-                    node.textContent.trim()
-                ) {
-                    link.append(node.textContent.trim());
-                    node.remove();
-                }
+            const texts = [...th.childNodes].filter(
+                (node) =>
+                    node.nodeType === Node.TEXT_NODE && node.textContent.trim(),
+            );
+            for (const node of texts) {
+                link.append(node.textContent.trim());
+                node.remove();
+            }
+            if (texts.length === 0) {
+                // The label is in child elements (Unfold): link them all.
+                link.append(...th.childNodes);
             }
             th.prepend(link);
             if (column.priority) {
@@ -343,11 +372,11 @@
                 `id_${prefix}-INITIAL_FORMS`,
             );
             const initial = Number.parseInt(initialInput.value, 10);
-            const loaded = formRows(freshGroup, prefix).filter((row) =>
-                row.classList.contains("has_original"),
+            const loaded = formRows(freshGroup, prefix, config).filter((row) =>
+                isSaved(row, config),
             );
             const count = loaded.length;
-            const rows = formRows(group, prefix);
+            const rows = formRows(group, prefix, config);
             // Unsaved rows must keep indexes above every saved one.
             const unsaved = rows.filter((row) => {
                 const index = formIndex(row, prefix);
@@ -356,9 +385,7 @@
             for (const row of unsaved.reverse()) {
                 reindexForm(row, prefix, formIndex(row, prefix) + count);
             }
-            const anchor = rows.find(
-                (row) => !row.classList.contains("has_original"),
-            );
+            const anchor = rows.find((row) => !isSaved(row, config));
             const last = rows.at(-1);
             const inserted = loaded.map((row, offset) => {
                 const node = document.importNode(row, true);
@@ -523,8 +550,10 @@
     globalThis.DjangoAdminInlineControls = {
         decorateHeaders,
         filterUrl,
+        formIndex,
         formRows,
         init,
+        isSaved,
         loadMore,
         navigate,
         placeControls,
