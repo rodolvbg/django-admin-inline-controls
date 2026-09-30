@@ -86,11 +86,17 @@
     text-align: right;
 }
 
-.inline-controls table tfoot.inline-controls-tfoot .inline-controls-footer-label {
+.inline-controls
+    table
+    tfoot.inline-controls-tfoot
+    .inline-controls-footer-label {
     margin-right: 0.5rem;
     color: var(--body-quiet-color);
 }
 
-.inline-controls table tfoot.inline-controls-tfoot .inline-controls-footer-value {
+.inline-controls
+    table
+    tfoot.inline-controls-tfoot
+    .inline-controls-footer-value {
     font-weight: 600;
 }
