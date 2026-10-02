@@ -353,6 +353,39 @@ def test_rows_loaded_later_get_checkboxes(change_page: Page):
     expect(page.locator("#articles-group .inline-controls-select")).to_have_count(20)
 
 
+def test_row_actions(change_page: Page, author):
+    page = change_page
+    row = page.locator("#books-group tr.has_original").first
+    toggle = row.locator('[data-inline-controls-row-action="toggle_featured"]')
+    expect(toggle).to_have_text("Feature")
+    toggle.click()
+
+    status = page.locator(
+        "#books-inline-controls .inline-controls-row-actions-status "
+        ".inline-controls-status"
+    )
+    expect(status).to_have_text("“Book 01” is featured.")
+    assert_not_reloaded(page)
+    expect(
+        page.locator("#books-group tr.has_original").first.locator(
+            '[data-inline-controls-row-action="toggle_featured"]'
+        )
+    ).to_have_text("Unfeature")
+    assert Book.objects.get(author=author, title="Book 01").featured
+
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.locator("#books-group tr.has_original").first.locator(
+        '[data-inline-controls-row-action="delete"]'
+    ).click()
+    expect(status).to_have_text("Deleted 1 book.")
+    assert not Book.objects.filter(author=author, title="Book 01").exists()
+
+    page.locator("#books-group tr.has_original").first.locator(
+        '[data-inline-controls-row-link="view"]'
+    ).click()
+    expect(page).to_have_url(re.compile(r"/admin/demo/book/\d+/change/$"))
+
+
 @pytest.fixture
 def themed_page(live_server, page: Page, admin_user, author):
     """The test admin's inline with a theme-like markup (``books-4``)."""

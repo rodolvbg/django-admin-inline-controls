@@ -1,0 +1,19 @@
+{% comment %}
+  The action buttons of one saved row (`obj`), in the inline's "Actions"
+  column. Each action has `name`, `label`, `css_classes`, `attrs`,
+  `confirmation` and, for "view", `url`. The JS relies on the
+  data-inline-controls-row-action* attributes. Shown once the JS is ready.
+{% endcomment %}
+{% block row_actions %}
+  <span class="inline-controls-row-actions" data-inline-controls-row-actions hidden>
+    {% for action in actions %}
+      {% block row_action %}
+        {% if action.url %}
+          <a href="{{ action.url }}" role="button" class="button inline-controls-row-action {{ action.css_classes }}" data-inline-controls-row-link="{{ action.name }}" {{ action.attrs }}>{{ action.label }}</a>
+        {% else %}
+          <button type="button" class="button inline-controls-row-action {{ action.css_classes }}" data-inline-controls-row-action="{{ action.name }}" data-pk="{{ obj.pk }}"{% if action.confirmation %} data-confirmation="{{ action.confirmation }}"{% endif %} {{ action.attrs }}>{{ action.label }}</button>
+        {% endif %}
+      {% endblock row_action %}
+    {% endfor %}
+  </span>
+{% endblock row_actions %}

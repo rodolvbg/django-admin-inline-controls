@@ -1,4 +1,12 @@
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+    afterEach,
+    beforeAll,
+    beforeEach,
+    describe,
+    expect,
+    it,
+    vi,
+} from "vitest";
 
 let api;
 
@@ -591,7 +599,7 @@ describe("Unfold markup", () => {
                 ],
                 actionUrl: "/action/",
                 actionsFormId: "books-inline-controls-actions",
-                actions: [],
+                actions: [{ name: "go", confirmation: null }],
                 pkName: "id",
                 messages: {
                     ...config().messages,
@@ -637,5 +645,111 @@ describe("Unfold markup", () => {
         expect(calls).toEqual(["add", "delete"]);
         delete window.addInlineTemplateHandler;
         delete window.deleteInlineTemplateHandler;
+    });
+});
+
+describe("row actions", () => {
+    const render = () => {
+        document.body.innerHTML = `
+            <form id="author_form">
+              <input name="csrfmiddlewaretoken" value="tok">
+              <div class="inline-controls" id="books-inline-controls">
+                <div class="inline-group" id="books-group">
+                  <fieldset class="module"><h2>Books</h2><table><tbody>
+                    <tr id="books-0" class="form-row has_original"><td>
+                      <input type="hidden" name="books-0-id" value="7">
+                      <span class="inline-controls-row-actions" data-inline-controls-row-actions hidden>
+                        <button type="button" data-inline-controls-row-action="toggle" data-pk="7">Feature</button>
+                        <button type="button" data-inline-controls-row-action="delete" data-pk="7" data-confirmation="Delete?">Delete</button>
+                      </span>
+                    </td></tr>
+                  </tbody></table></fieldset>
+                </div>
+                <div class="inline-controls-footer"><span class="inline-controls-row-actions-status"><span class="inline-controls-status"></span></span></div>
+              </div>
+            </form>`;
+        const root = document.getElementById("books-inline-controls");
+        root.dataset.inlineControls = JSON.stringify(
+            config({
+                actionUrl: "/action/",
+                actionsFormId: "books-inline-controls-actions",
+                actions: [],
+                rowActions: true,
+                pkName: "id",
+                messages: { ...config().messages, actionFailed: "Failed" },
+            }),
+        );
+        return root;
+    };
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+    });
+
+    it("shows the buttons without adding the bulk checkboxes", () => {
+        const root = render();
+        api.setup(root);
+
+        expect(
+            root.querySelector("[data-inline-controls-row-actions]").hidden,
+        ).toBe(false);
+        expect(root.querySelector(".inline-controls-select")).toBeNull();
+    });
+
+    it("posts the row's action and swaps in the response", async () => {
+        const root = render();
+        api.setup(root);
+        const fresh = root.outerHTML.replace("Feature", "Unfeature");
+        const fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            redirected: false,
+            headers: new Headers(),
+            text: () =>
+                Promise.resolve(
+                    `<div id="books-inline-controls-response" data-status="done" data-message="Featured.">${fresh}</div>`,
+                ),
+        });
+        vi.stubGlobal("fetch", fetch);
+
+        await api.runRowAction(root, root.querySelector("[data-pk]"));
+
+        const [, options] = fetch.mock.calls[0];
+        expect([...options.body.entries()]).toEqual([
+            ["csrfmiddlewaretoken", "tok"],
+            ["_inline_controls_loaded", "1"],
+            ["row_action", "toggle"],
+            ["_selected_action", "7"],
+        ]);
+        const node = document.getElementById("books-inline-controls");
+        expect(node.textContent).toContain("Unfeature");
+        expect(
+            node.querySelector(".inline-controls-row-actions-status")
+                .textContent,
+        ).toBe("Featured.");
+    });
+
+    it("asks for the confirmation first and reports failures", async () => {
+        const root = render();
+        api.setup(root);
+        const fetch = vi.fn().mockRejectedValue(new Error("down"));
+        vi.stubGlobal("fetch", fetch);
+        const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+        const button = root.querySelector(
+            '[data-inline-controls-row-action="delete"]',
+        );
+
+        await api.runRowAction(root, button);
+        expect(confirm).toHaveBeenCalledWith("Delete?");
+        expect(fetch).not.toHaveBeenCalled();
+
+        confirm.mockReturnValue(true);
+        button.click();
+        await vi.waitFor(() =>
+            expect(
+                root.querySelector(".inline-controls-row-actions-status")
+                    .textContent,
+            ).toBe("Failed"),
+        );
     });
 });

@@ -170,6 +170,7 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
     for option, error_id in (
         ("inline_save_button", "admin_inline_controls.E008"),
         ("inline_actions", "admin_inline_controls.E010"),
+        ("inline_row_actions", "admin_inline_controls.E019"),
     ):
         if getattr(inline, option) and missing_admin_mixin:
             error(
@@ -189,6 +190,19 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
                 f"'{name}.inline_actions' contains {action!r}, which is not a "
                 f"method of '{name}', a callable, or a built-in action.",
                 "admin_inline_controls.E009",
+            )
+
+    for action in inline.inline_row_actions:
+        try:
+            _, func = inline._resolve_inline_row_action(action)
+        except AttributeError:
+            func = None
+        if not callable(func):
+            error(
+                f"'{name}.inline_row_actions' contains {action!r}, which is not "
+                f"a method of '{name}', a callable, or a built-in row action "
+                "('view', 'delete').",
+                "admin_inline_controls.E018",
             )
 
     return errors

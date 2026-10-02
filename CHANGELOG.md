@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `inline_actions`: changelist-style actions on the selected rows, with
   "select all" across pages, the `@inline_action` decorator (confirmation
   prompts) and a built-in `delete_selected`.
+- `inline_row_actions`: buttons on each saved row (built-in `view` and
+  `delete`), compatible with django-inline-actions' signature and per-row
+  label/CSS/attribute hooks, run through the inline's action endpoint.
 - Template blocks throughout the wrapper, toolbar, footer and response
   templates, and per-inline `inline_controls_toolbar_template` /
   `inline_controls_footer_template`, so they can be extended.

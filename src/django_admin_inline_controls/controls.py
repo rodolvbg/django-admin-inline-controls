@@ -440,9 +440,18 @@ class InlineControls:
             return []
         return list(self.inline.get_inline_actions(self.request, self.parent).values())
 
+    @cached_property
+    def has_row_actions(self) -> bool:
+        """Whether the rows have action buttons (and their endpoint)."""
+        return bool(self.inline.inline_row_actions) and (
+            self._endpoint("action") is not None
+        )
+
     @property
     def action_url(self) -> str | None:
-        return self._endpoint("action") if self.actions else None
+        return (
+            self._endpoint("action") if self.actions or self.has_row_actions else None
+        )
 
     @property
     def actions_form_id(self) -> str:
@@ -465,6 +474,7 @@ class InlineControls:
             self.paginator is not None
             or self.save_url is not None
             or bool(self.summary_rows)
+            or self.has_row_actions
         )
 
     @property
@@ -553,6 +563,7 @@ class InlineControls:
                 "nextUrl": self.next_page_url if self.mode == INFINITE else None,
                 "saveUrl": self.save_url,
                 "actionUrl": self.action_url,
+                "rowActions": self.has_row_actions,
                 "actionsFormId": self.actions_form_id,
                 "actions": [
                     {

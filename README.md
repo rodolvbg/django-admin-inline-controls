@@ -89,6 +89,7 @@ shareable and several inlines never clash.
 | `inline_controls_ajax` | `True` | Refresh the inline in place instead of reloading the page. |
 | `inline_save_button` | `False` | Show a button that saves only this inline. See [Saving only the inline](#saving-only-the-inline). |
 | `inline_actions` | `()` | Actions for the selected rows. See [Inline actions](#inline-actions). |
+| `inline_row_actions` | `()` | Buttons on each saved row. See [Row actions](#row-actions). |
 | `inline_footer_rows` | `()` | Rows of totals, averages… below the table. See [Footer rows](#footer-rows). |
 | `inline_footer_scope` | `"filtered"` | What the footer rows add up: `"filtered"` or `"page"`. |
 | `inline_footer_tfoot` | `True` | Render the footer rows in the table's `<tfoot>` (tabular inlines); `False` shows them as a summary line. |
@@ -304,6 +305,60 @@ class AuthorAdmin(InlineControlsAdminMixin, admin.ModelAdmin):
 parent `ModelAdmin` (`admin_inline_controls.E010`), and the user needs view
 or change permission on the parent object. Not available on nested_admin
 inlines (`admin_inline_controls.E103`).
+
+### Row actions
+
+Buttons on each saved row, in an **Actions** column: no selection, no menu,
+no "Go".
+
+![Row actions: View, Feature/Unfeature and Delete on each row](docs/screenshots/row-actions.png)
+
+```python
+class BookInline(InlineControlsMixin, admin.TabularInline):
+    model = Book
+    inline_row_actions = ["view", "toggle_featured", "delete"]
+
+    def toggle_featured(self, request, obj, parent_obj=None):
+        obj.featured = not obj.featured
+        obj.save(update_fields=["featured"])
+        self.message_user(request, f"“{obj}” updated.", messages.SUCCESS)
+
+    def get_toggle_featured_label(self, obj):
+        return "Unfeature" if obj.featured else "Feature"
+```
+
+- **Built-in:** `"view"` (a link to the row's change view, when its model
+  has one on the site and the user may view it) and `"delete"` (asks
+  "Delete “Book 01”? This cannot be undone.", deletes it like
+  `delete_selected` and records it in the parent's history; needs the
+  delete permission).
+- **Your own**, as methods or callables, in either form:
+  - `action(self, request, obj, parent_obj=None)` for one row — the
+    signature of [django-inline-actions](https://github.com/escaped/django-inline-actions),
+    so its actions can be moved here as they are;
+  - `action(self, request, queryset)`, like an [inline action](#inline-actions)
+    (`@inline_action`, `permissions`, `confirmation`…), run on a queryset
+    with only that row: the same function can be in both lists.
+- **Per row:** the label, CSS classes and HTML attributes come from the
+  function's `short_description`, `css_classes` and `attribute_properties`
+  (a dict, escaped, or a string), or from `get_<action>_label(obj)`,
+  `get_<action>_css(obj)` and `get_<action>_attr(obj)` on the inline.
+  Override `get_inline_row_actions(request, obj)` to offer some actions on
+  some rows only (`obj` is the row; the parent is
+  `request.inline_controls_parent`).
+- They return what inline actions do: `None` re-renders the inline with
+  the messages from `self.message_user()` (shown in its footer), a file is
+  downloaded, a redirect is followed.
+- The buttons are rendered by the server, in a read-only column added to
+  the inline's fields (`inline_controls_row_actions`; put it in your
+  `fields` or `fieldsets` to place it yourself), and shown once the JS is
+  ready. Its template is `inline_row_actions_template`
+  (`django_admin_inline_controls/row_actions.html`).
+
+**Requirements:** as for inline actions, `InlineControlsAdminMixin` on the
+parent `ModelAdmin` (`admin_inline_controls.E019`); not available on
+nested_admin inlines (`admin_inline_controls.E105`). They only appear in
+the change view, once the parent exists.
 
 ### Footer rows
 
@@ -541,6 +596,11 @@ you replace a block's markup (`{{ block.super }}` keeps the original).
 | `result_count` | "25 results". |
 | `infinite`, `infinite_count`, `load_more`, `load_more_label` | Infinite mode: "Showing 15 of 70" and "Load more". |
 | `save`, `save_status`, `save_button`, `save_label` | The save-inline button and its status. |
+| `row_actions_status` | Where the row actions' messages appear. |
+
+**`row_actions.html`** (one row's buttons): `row_actions`, `row_action`
+(once per action, with `action`: `name`, `label`, `css_classes`, `attrs`,
+`confirmation` and, for `view`, `url`).
 
 **`inline_response.html`** (the save/action endpoints' response):
 `response`, `inlines`. Set `inline_controls_response_template` on the
@@ -624,6 +684,8 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E008` | `inline_save_button = True` but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
 | `admin_inline_controls.E009` | An `inline_actions` entry is not a method of the inline, a callable or a built-in action. |
 | `admin_inline_controls.E010` | `inline_actions` is set but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
+| `admin_inline_controls.E018` | An `inline_row_actions` entry is not a method of the inline, a callable or a built-in row action. |
+| `admin_inline_controls.E019` | `inline_row_actions` is set but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
 | `admin_inline_controls.E011` | `inline_controls_selectors` is not a dict. |
 | `admin_inline_controls.E012` | An `inline_controls_selectors` key is unknown, or its value is not a selector or a non-empty list of selectors. |
 | `admin_inline_controls.E013` | `inline_footer_rows` is not a list of `(label, {column: value})` pairs. |
@@ -635,12 +697,14 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E102` | `inline_save_button = True` on a nested_admin inline. |
 | `admin_inline_controls.E103` | `inline_actions` on a nested_admin inline. |
 | `admin_inline_controls.E104` | Unfold's `per_page` on an inline with `UnfoldInlineControlsMixin`. |
+| `admin_inline_controls.E105` | `inline_row_actions` on a nested_admin inline. |
 
 ## JavaScript files
 
 Each inline loads only the scripts it uses, through its `media`: `core.js`
 (pagination, filters, sorting, placing the controls) always, `save.js`
-with `inline_save_button`, `actions.js` with `inline_actions` and
+with `inline_save_button`, `actions.js` with `inline_actions` or
+`inline_row_actions`, and
 `contrib/unfold.js` with `UnfoldInlineControlsMixin`. The admin merges the
 media of every inline on the page, so each file loads at most once.
 

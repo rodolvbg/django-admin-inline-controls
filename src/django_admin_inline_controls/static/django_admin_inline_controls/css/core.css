@@ -277,3 +277,18 @@ th.inline-controls-sortable .inline-controls-sort-toggle {
 .inline-group table tfoot.inline-controls-tfoot .inline-controls-footer-value {
     font-weight: bold;
 }
+
+.inline-controls-row-actions:not([hidden]) {
+    display: inline-flex;
+    gap: 4px;
+}
+
+.inline-controls-row-action.button {
+    margin: 0;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+}

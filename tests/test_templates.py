@@ -92,9 +92,11 @@ def test_every_documented_block_exists():
             "save_status",
             "save_button",
             "save_label",
+            "row_actions_status",
             "footer_end",
         ],
         "django_admin_inline_controls/inline_response.html": ["response", "inlines"],
+        "django_admin_inline_controls/row_actions.html": ["row_actions", "row_action"],
         "django_admin_inline_controls/tfoot.html": [
             "tfoot",
             "tfoot_row",

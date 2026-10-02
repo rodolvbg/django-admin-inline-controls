@@ -1,10 +1,16 @@
 /*
- * django-admin-inline-controls: inline actions (inline_actions).
- * Loaded after core.js, only by inlines that use them.
+ * django-admin-inline-controls: inline actions (inline_actions) and row
+ * actions (inline_row_actions). Loaded after core.js, only by inlines that
+ * use them.
  */
 (() => {
     const core = globalThis.DjangoAdminInlineControls;
     const SCOPE = ".inline-controls-actions";
+    const ROW_SCOPE = ".inline-controls-row-actions-status";
+
+    /** Whether the inline has bulk actions (the toolbar's select). */
+    const hasBulkActions = (config) =>
+        Boolean(config.actionUrl) && (config.actions ?? []).length > 0;
 
     const format = (template, values) =>
         template.replace(/%\((\w+)\)s/g, (_, key) => values[key]);
@@ -81,10 +87,23 @@
         }
     }
 
+    /** Show the row action buttons, rendered hidden by the server. */
+    function showRowActions(scope, config) {
+        if (!config.actionUrl || !config.rowActions) {
+            return;
+        }
+        for (const el of scope.querySelectorAll(
+            "[data-inline-controls-row-actions]",
+        )) {
+            el.hidden = false;
+        }
+    }
+
     function setupActions(root, state) {
         const { config } = state;
         state.selectAcross = false;
-        if (!config.actionUrl) {
+        showRowActions(root, config);
+        if (!hasBulkActions(config)) {
             return;
         }
         for (const { row, pk } of selectableRows(root, config)) {
@@ -132,20 +151,56 @@
         if (state.dirty && !window.confirm(config.messages.unsaved)) {
             return;
         }
-        const data = new FormData();
-        const csrf = form.querySelector("[name=csrfmiddlewaretoken]");
-        if (csrf) {
-            data.append(csrf.name, csrf.value);
-        }
+        const data = actionData(root, form, config);
         data.append("action", action.name);
         for (const pk of pks) {
             data.append("_selected_action", pk);
         }
         data.append("select_across", state.selectAcross ? "1" : "0");
+        await postAction(root, data, SCOPE);
+    }
+
+    /** One row's action: the button's row only, no selection needed. */
+    async function runRowAction(root, button) {
+        const state = core.stateOf(root);
+        const { config } = state;
+        const group = document.getElementById(`${config.prefix}-group`);
+        const form = group?.closest("form");
+        if (state.loading || !config.actionUrl || !form) {
+            return;
+        }
+        const { confirmation } = button.dataset;
+        if (confirmation && !window.confirm(confirmation)) {
+            return;
+        }
+        if (state.dirty && !window.confirm(config.messages.unsaved)) {
+            return;
+        }
+        const data = actionData(root, form, config);
+        data.append("row_action", button.dataset.inlineControlsRowAction);
+        data.append("_selected_action", button.dataset.pk);
+        await postAction(root, data, ROW_SCOPE);
+    }
+
+    /** The CSRF token and the number of rows loaded (infinite mode). */
+    function actionData(root, form, config) {
+        const data = new FormData();
+        const csrf = form.querySelector("[name=csrfmiddlewaretoken]");
+        if (csrf) {
+            data.append(csrf.name, csrf.value);
+        }
         data.append(
             "_inline_controls_loaded",
             String(selectableRows(root, config).length),
         );
+        return data;
+    }
+
+    /** POST an action and show its result (a download, a redirect, another
+     * page, or the re-rendered inline with its status under `scope`). */
+    async function postAction(root, data, scope) {
+        const state = core.stateOf(root);
+        const { config } = state;
         state.loading = true;
         root.classList.add("inline-controls-loading");
         const target = new URL(
@@ -204,7 +259,7 @@
                 node,
                 result.dataset.status,
                 result.dataset.message,
-                SCOPE,
+                scope,
             );
         } catch {
             state.loading = false;
@@ -213,7 +268,7 @@
                 root,
                 "failed",
                 config.messages.actionFailed,
-                SCOPE,
+                scope,
             );
         }
     }
@@ -228,7 +283,8 @@
     core.register({
         setup: setupActions,
         rowsLoaded(root, state) {
-            if (state.config.actionUrl) {
+            showRowActions(root, state.config);
+            if (hasBulkActions(state.config)) {
                 for (const { row, pk } of selectableRows(root, state.config)) {
                     addRowCheckbox(row, pk, state.config);
                 }
@@ -236,6 +292,13 @@
             }
         },
         click(event, root, state) {
+            const rowButton = event.target.closest(
+                "[data-inline-controls-row-action]",
+            );
+            if (rowButton) {
+                runRowAction(root, rowButton);
+                return true;
+            }
             if (event.target.closest("[data-inline-controls-run]")) {
                 runAction(root);
                 return true;
@@ -263,5 +326,5 @@
         },
     });
 
-    Object.assign(core, { runAction });
+    Object.assign(core, { runAction, runRowAction });
 })();

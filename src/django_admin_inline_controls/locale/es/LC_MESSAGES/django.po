@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: django-admin-inline-controls 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-29 15:33-0500\n"
+"POT-Creation-Date: 2026-10-02 13:43+0200\n"
 "PO-Revision-Date: 2026-09-29 18:00+0200\n"
 "Last-Translator: Rodolfo Becerra\n"
 "Language-Team: Spanish\n"
@@ -12,8 +12,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? "
-"1 : 2;\n"
+"Plural-Forms: nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;\n"
 
 #: actions.py
 #, python-format
@@ -22,8 +21,7 @@ msgstr "Eliminar %(verbose_name_plural)s seleccionados"
 
 #: actions.py
 #, python-format
-msgid ""
-"Delete %(count)s selected %(verbose_name_plural)s? This cannot be undone."
+msgid "Delete %(count)s selected %(verbose_name_plural)s? This cannot be undone."
 msgstr "¿Eliminar %(count)s %(verbose_name_plural)s seleccionados? No se puede deshacer."
 
 #: actions.py
@@ -69,9 +67,7 @@ msgid "No action selected."
 msgstr "No se ha seleccionado ninguna acción."
 
 #: controls.py mixins.py
-msgid ""
-"Items must be selected in order to perform actions on them. No items have "
-"been changed."
+msgid "Items must be selected in order to perform actions on them. No items have been changed."
 msgstr "Se deben seleccionar elementos para poder realizar acciones sobre estos. No se ha modificado ningún elemento."
 
 #: controls.py
@@ -154,6 +150,10 @@ msgid "No"
 msgstr "No"
 
 #: mixins.py
+msgid "Actions"
+msgstr "Acciones"
+
+#: mixins.py
 msgid "Please correct the errors below."
 msgstr "Por favor, corrija los errores detallados abajo."
 
@@ -164,6 +164,23 @@ msgstr "Guardado."
 #: mixins.py
 msgid "Done."
 msgstr "Hecho."
+
+#: row_actions.py
+msgid "Delete"
+msgstr "Eliminar"
+
+#: row_actions.py
+#, python-format
+msgid "Delete “%(object)s”? This cannot be undone."
+msgstr "¿Eliminar «%(object)s»? No se puede deshacer."
+
+#: row_actions.py
+msgid "View"
+msgstr "Ver"
+
+#: row_actions.py
+msgid "This item has no page."
+msgstr "Este elemento no tiene página."
 
 #: templates/django_admin_inline_controls/footer.html
 #, python-format
@@ -187,8 +204,7 @@ msgstr[1] "%(counter)s resultados"
 msgstr[2] "%(counter)s resultados"
 
 #: templates/django_admin_inline_controls/footer.html
-msgid ""
-"Saves only this inline. Other changes on the page are kept but not saved."
+msgid "Saves only this inline. Other changes on the page are kept but not saved."
 msgstr "Guarda solo este inline. Los demás cambios de la página se mantienen, pero no se guardan."
 
 #: templates/django_admin_inline_controls/toolbar.html

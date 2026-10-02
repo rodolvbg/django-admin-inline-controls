@@ -27,7 +27,7 @@ from django.http import (
 from django.template.defaultfilters import floatformat
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path
-from django.utils.safestring import SafeString
+from django.utils.safestring import SafeString, mark_safe
 from django.utils.text import capfirst
 from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
@@ -251,6 +251,13 @@ class InlineControlsMixin:
     #: names, callables, or ``"delete_selected"``. Requires
     #: ``InlineControlsAdminMixin`` on the parent ``ModelAdmin``.
     inline_actions: Sequence[str | Callable[..., Any]] = ()
+    #: Buttons on each saved row: method names, callables, or ``"view"`` /
+    #: ``"delete"``. An action takes ``(request, obj, parent_obj=None)``
+    #: (django-inline-actions' signature) or, like ``inline_actions``,
+    #: ``(request, queryset)`` (a queryset with only that row). Requires
+    #: ``InlineControlsAdminMixin`` on the parent ``ModelAdmin``.
+    inline_row_actions: Sequence[str | Callable[..., Any]] = ()
+    inline_row_actions_template = "django_admin_inline_controls/row_actions.html"
     #: Rows of totals/averages/… below the table: ``(label, {column: value})``
     #: pairs, a value being an aggregate (``Sum("pages")``), a
     #: ``callable(queryset)`` or a constant.
@@ -435,6 +442,105 @@ class InlineControlsMixin:
             )
         return actions
 
+    # Row actions -----------------------------------------------------------
+
+    def _resolve_inline_row_action(
+        self, action: str | Callable[..., Any]
+    ) -> tuple[str, Callable[..., Any]]:
+        from django_admin_inline_controls.row_actions import BUILTIN_ROW_ACTIONS
+
+        if callable(action):
+            return action.__name__, action
+        if not isinstance(action, str):
+            raise AttributeError(action)
+        if hasattr(type(self), action):
+            return action, getattr(type(self), action)
+        if action in BUILTIN_ROW_ACTIONS:
+            return action, BUILTIN_ROW_ACTIONS[action]
+        raise AttributeError(action)
+
+    def get_inline_row_actions(
+        self, request: HttpRequest | None, obj: Any
+    ) -> Sequence[str | Callable[..., Any]]:
+        """The actions of the row ``obj``. Override to offer some only on
+        some rows (e.g. "Unpublish" on the published ones); the parent object
+        is ``request.inline_controls_parent``."""
+        return self.inline_row_actions
+
+    def get_inline_row_action_specs(
+        self, request: HttpRequest | None, parent: Any, obj: Any
+    ) -> dict[str, Any]:
+        """The row actions of ``obj`` this user may run, keyed by name."""
+        from django_admin_inline_controls.row_actions import row_action_spec, view
+
+        if request is None or obj is None or obj.pk is None:
+            return {}
+        request.inline_controls_parent = parent  # type: ignore[attr-defined]
+        specs = {}
+        for action in self.get_inline_row_actions(request, obj):
+            name, func = self._resolve_inline_row_action(action)
+            permissions = getattr(func, "allowed_permissions", ())
+            if not all(
+                getattr(self, f"has_{permission}_permission")(request, parent)
+                for permission in permissions
+            ):
+                continue
+            spec = row_action_spec(self, name, func, obj)
+            if func is view and spec.url is None:
+                continue  # its model has no change view here
+            specs[name] = spec
+        return specs
+
+    @property
+    def inline_controls_row_actions_column(self) -> str:
+        return "inline_controls_row_actions"
+
+    def inline_controls_row_actions(self, obj: Any = None) -> SafeString:
+        """The row actions' buttons: a read-only column of the inline."""
+        from django.template.loader import render_to_string
+
+        from django_admin_inline_controls.row_actions import get_render_context
+
+        request, parent = get_render_context(self)
+        actions = self.get_inline_row_action_specs(request, parent, obj)
+        if not actions:
+            return mark_safe("")
+        return mark_safe(
+            render_to_string(
+                self.inline_row_actions_template,
+                {"actions": list(actions.values()), "obj": obj, "inline": self},
+            )
+        )
+
+    inline_controls_row_actions.short_description = _("Actions")  # type: ignore[attr-defined]
+
+    def _with_row_actions(self, obj: Any) -> bool:
+        return bool(self.inline_row_actions) and obj is not None and obj.pk is not None
+
+    def get_readonly_fields(self, request: HttpRequest, obj: Any = None) -> Any:
+        fields = super().get_readonly_fields(request, obj)  # type: ignore[misc]
+        column = self.inline_controls_row_actions_column
+        if self._with_row_actions(obj) and column not in fields:
+            fields = [*fields, column]
+        return fields
+
+    def get_fields(self, request: HttpRequest, obj: Any = None) -> Any:
+        fields = super().get_fields(request, obj)  # type: ignore[misc]
+        column = self.inline_controls_row_actions_column
+        if self._with_row_actions(obj) and column not in fields:
+            fields = [*fields, column]
+        return fields
+
+    def get_fieldsets(self, request: HttpRequest, obj: Any = None) -> Any:
+        fieldsets = list(super().get_fieldsets(request, obj))  # type: ignore[misc]
+        column = self.inline_controls_row_actions_column
+        if self._with_row_actions(obj) and fieldsets:
+            name, options = fieldsets[-1]
+            fields = list(options.get("fields") or ())
+            if column not in fields:
+                fieldsets[-1] = (name, {**options, "fields": [*fields, column]})
+        return fieldsets
+
     def message_user(
         self,
         request: HttpRequest,
@@ -453,6 +559,10 @@ class InlineControlsMixin:
     def get_formset(
         self, request: HttpRequest, obj: Any = None, **kwargs: Any
     ) -> type[BaseInlineFormSet[Any, Any, Any]]:
+        from django_admin_inline_controls.row_actions import set_render_context
+
+        if self.inline_row_actions:
+            set_render_context(self, request, obj)
         formset_class = super().get_formset(request, obj, **kwargs)  # type: ignore[misc]
         return type(
             formset_class.__name__,
@@ -471,7 +581,7 @@ class InlineControlsMixin:
         js = ["django_admin_inline_controls/js/core.js"]
         if self.inline_save_button:
             js.append("django_admin_inline_controls/js/save.js")
-        if self.inline_actions:
+        if self.inline_actions or self.inline_row_actions:
             js.append("django_admin_inline_controls/js/actions.js")
         return super().media + forms.Media(  # type: ignore[misc]
             js=js,
@@ -678,12 +788,12 @@ class InlineControlsAdminMixin:
         if not self.has_view_or_change_permission(request, obj):  # type: ignore[attr-defined]
             raise PermissionDenied
         formset_class, inline = self._inline_controls_formset_class(
-            request, obj, prefix, lambda inline: bool(inline.inline_actions)
+            request,
+            obj,
+            prefix,
+            lambda inline: bool(inline.inline_actions or inline.inline_row_actions),
         )
-        actions = inline.get_inline_actions(request, obj)
-        action = actions.get(request.POST.get("action", ""))
-        if action is None:
-            return HttpResponseBadRequest("Unknown or forbidden action.")
+        row_action = request.POST.get("row_action")
 
         try:
             loaded = int(request.POST.get("_inline_controls_loaded") or 0)
@@ -697,6 +807,22 @@ class InlineControlsAdminMixin:
         )
         formset.get_queryset()
         queryset = formset.inline_controls.filtered_queryset
+        if row_action is not None:
+            return self._inline_controls_row_action(
+                request,
+                obj,
+                inline,
+                formset_class,
+                prefix,
+                loaded,
+                row_action,
+                queryset,
+            )
+        action = inline.get_inline_actions(request, obj).get(
+            request.POST.get("action", "")
+        )
+        if action is None:
+            return HttpResponseBadRequest("Unknown or forbidden action.")
         if request.POST.get("select_across") != "1":
             pk_field = queryset.model._meta.pk
             pks = []
@@ -725,6 +851,42 @@ class InlineControlsAdminMixin:
             status = "error" if failed else "done"
             text = " ".join(str(message) for message in sent) or gettext("Done.")
 
+        fresh = self._inline_controls_fresh_formset(
+            request, obj, inline, formset_class, prefix, loaded
+        )
+        return self._inline_controls_response(
+            request, obj, inline, fresh, prefix, status, text
+        )
+
+    def _inline_controls_row_action(
+        self,
+        request: HttpRequest,
+        obj: Any,
+        inline: InlineControlsMixin,
+        formset_class: Any,
+        prefix: str,
+        loaded: int,
+        name: str,
+        queryset: QuerySet,
+    ) -> HttpResponseBase:
+        from django_admin_inline_controls.row_actions import run_row_action
+
+        pk_field = queryset.model._meta.pk
+        try:
+            pk = pk_field.to_python(request.POST.get("_selected_action"))
+        except ValidationError:
+            pk = None
+        row = queryset.filter(pk=pk).first() if pk is not None else None
+        action = inline.get_inline_row_action_specs(request, obj, row).get(name)
+        if action is None:
+            return HttpResponseBadRequest("Unknown or forbidden action.")
+        response = run_row_action(inline, request, action, row, obj)
+        if isinstance(response, HttpResponseBase):
+            return response
+        sent = list(messages.get_messages(request))
+        failed = any(message.level >= messages.ERROR for message in sent)
+        status = "error" if failed else "done"
+        text = " ".join(str(message) for message in sent) or gettext("Done.")
         fresh = self._inline_controls_fresh_formset(
             request, obj, inline, formset_class, prefix, loaded
         )

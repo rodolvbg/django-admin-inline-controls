@@ -32,6 +32,7 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
     ]
     inline_save_button = True
     inline_actions = ["mark_published", "export_csv", "delete_selected"]
+    inline_row_actions = ["view", "toggle_featured", "delete"]
     inline_footer_rows = [
         ("Total", {"title": Count("pk"), "pages": Sum("pages")}),
         ("Average", {"pages": Avg("pages")}),
@@ -44,6 +45,16 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
     def mark_published(self, request, queryset):
         count = queryset.update(status=Book.Status.PUBLISHED)
         self.message_user(request, f"{count} books published.", messages.SUCCESS)
+
+    def toggle_featured(self, request, obj, parent_obj=None):
+        """A row action with django-inline-actions' signature."""
+        obj.featured = not obj.featured
+        obj.save(update_fields=["featured"])
+        state = "featured" if obj.featured else "no longer featured"
+        self.message_user(request, f"“{obj}” is {state}.", messages.SUCCESS)
+
+    def get_toggle_featured_label(self, obj):
+        return "Unfeature" if obj.featured else "Feature"
 
     @inline_action(description="Export selected %(verbose_name_plural)s to CSV")
     def export_csv(self, request, queryset):

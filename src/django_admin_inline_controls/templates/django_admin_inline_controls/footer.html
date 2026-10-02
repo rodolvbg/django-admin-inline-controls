@@ -87,6 +87,12 @@
         {% endif %}
       {% endblock save %}
 
+      {% block row_actions_status %}
+        {% if controls.has_row_actions %}
+          <span class="inline-controls-row-actions-status"><span class="inline-controls-status" role="status" aria-live="polite"></span></span>
+        {% endif %}
+      {% endblock row_actions_status %}
+
       {% block footer_end %}{% endblock %}
     </div>
   {% endif %}
