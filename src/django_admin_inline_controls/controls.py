@@ -359,11 +359,7 @@ class InlineControls:
         return columns
 
     def _column_label(self, name: str) -> str:
-        try:
-            label = label_for_field(name, self.inline.model, self.inline)  # type: ignore[call-overload]
-            return str(capfirst(label))
-        except AttributeError:
-            return name
+        return column_label(self.inline, name)
 
     # Pagination ------------------------------------------------------------
 
@@ -483,33 +479,7 @@ class InlineControls:
         """The footer rows laid out in a table ``width`` columns wide whose
         field columns are at ``positions`` (0-based), or ``None`` if a
         value's column isn't among them."""
-        # Columns before the first field's (Django's narrow "original" one).
-        leading = min(positions.values(), default=0)
-        rows = []
-        for index, row in enumerate(self.footer_rows):
-            if any(cell.column not in positions for cell in row.cells):
-                return None
-            by_position = {positions[cell.column]: cell for cell in row.cells}
-            if not by_position:
-                continue
-            first, last = min(by_position), max(by_position)
-            # The leading columns alone (Django's narrow "original" one) don't
-            # fit the label: it spans the empty field columns before the
-            # first value too, or goes into that value's cell.
-            label_colspan = first if first > leading else 0
-            cells = [] if label_colspan else [TfootCell()] * first
-            for position in range(first, last + 1):
-                cell = by_position.get(position)
-                cells.append(
-                    TfootCell(
-                        cell=cell,
-                        key=f"{index}:{cell.column}" if cell else "",
-                        label_here=not label_colspan and position == first,
-                    )
-                )
-            trailing = max(width - last - 1, 0)
-            rows.append(TfootRow(index, row.label, label_colspan, cells, trailing))
-        return rows
+        return layout_tfoot_rows(self.footer_rows, positions, width)
 
     # Footer rows -----------------------------------------------------------
 
@@ -636,3 +606,66 @@ def bound_primary_keys(formset: Any) -> list[Any]:
         except ValidationError:
             continue
     return pks
+
+
+def column_label(inline: Any, name: str) -> str:
+    """The header of the inline's column ``name``."""
+    try:
+        label = label_for_field(name, inline.model, inline, return_attr=False)
+        return str(capfirst(label))
+    except AttributeError:
+        return name
+
+
+def empty_footer_rows(inline: Any, request: HttpRequest | None) -> list[FooterRow]:
+    """``inline_footer_rows`` without values, for the add view: there are no
+    saved rows to aggregate yet, but the <tfoot> keeps its structure and
+    ``data-*`` attributes (``data-value=""``) for the page's JS."""
+    definitions = inline.get_inline_footer_rows(request, None)
+    return [
+        FooterRow(
+            label=str(label),
+            cells=[
+                FooterCell(
+                    column=column, column_label=column_label(inline, column), value=""
+                )
+                for column in cells
+            ],
+        )
+        for label, cells in definitions or ()
+    ]
+
+
+def layout_tfoot_rows(
+    footer_rows: list[FooterRow], positions: dict[str, int], width: int = 0
+) -> list[TfootRow] | None:
+    """``footer_rows`` laid out in a table ``width`` columns wide whose field
+    columns are at ``positions`` (0-based), or ``None`` if a value's column
+    isn't among them."""
+    # Columns before the first field's (Django's narrow "original" one).
+    leading = min(positions.values(), default=0)
+    rows = []
+    for index, row in enumerate(footer_rows):
+        if any(cell.column not in positions for cell in row.cells):
+            return None
+        by_position = {positions[cell.column]: cell for cell in row.cells}
+        if not by_position:
+            continue
+        first, last = min(by_position), max(by_position)
+        # The leading columns alone (Django's narrow "original" one) don't
+        # fit the label: it spans the empty field columns before the first
+        # value too, or goes into that value's cell.
+        label_colspan = first if first > leading else 0
+        cells = [] if label_colspan else [TfootCell()] * first
+        for position in range(first, last + 1):
+            cell = by_position.get(position)
+            cells.append(
+                TfootCell(
+                    cell=cell,
+                    key=f"{index}:{cell.column}" if cell else "",
+                    label_here=not label_colspan and position == first,
+                )
+            )
+        trailing = max(width - last - 1, 0)
+        rows.append(TfootRow(index, row.label, label_colspan, cells, trailing))
+    return rows

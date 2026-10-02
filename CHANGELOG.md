@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as the table's own `<tfoot>` (no JS) or a summary line. Raw values in
   `data-value` for the page's JS; format and markup customizable
   (`format_inline_footer_value()`, `tfoot.html` blocks).
+- The add view renders the footer rows' `<tfoot>` with empty values, for
+  the page's JS.
 - `inline_controls_selectors`: where the JS looks in the inline's markup is
   configurable (`DEFAULT_SELECTORS`), for themes and custom inline
   templates; a cancelable `inline-controls:place` event to place the

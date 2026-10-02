@@ -7,6 +7,8 @@ import re
 from django import template
 from django.utils.safestring import SafeString, mark_safe
 
+from django_admin_inline_controls.controls import empty_footer_rows, layout_tfoot_rows
+
 register = template.Library()
 
 
@@ -43,17 +45,28 @@ def inline_controls_render_inline(
     html = engine.get_template(template_name).render(context)
     controls = context.get("controls")
     formset = context["inline_admin_formset"]
-    if not controls or not controls.footer_rows or not formset.opts.inline_footer_tfoot:
+    if not formset.opts.inline_footer_tfoot:
         return mark_safe(html)
+    if controls:
+        footer_rows = controls.footer_rows
+    else:
+        # The add view: the rows' structure, without values.
+        request = getattr(formset.formset, "inline_controls_request", None)
+        footer_rows = empty_footer_rows(formset.opts, request)
     # Last in the table: if it has its own <tfoot> (Unfold's "Add another"),
     # that one stays the table's footer and these rows show above it.
     position = html.rfind("</table>")
-    rows = controls.tfoot_rows(*_header_columns(html)) if position != -1 else None
+    rows = (
+        layout_tfoot_rows(footer_rows, *_header_columns(html))
+        if footer_rows and position != -1
+        else None
+    )
     if not rows:
         return mark_safe(html)
     with context.push(tfoot_rows=rows):
         tfoot = engine.get_template(formset.opts.inline_footer_tfoot_template).render(
             context
         )
-    controls.tfoot_rendered = True
+    if controls:
+        controls.tfoot_rendered = True
     return mark_safe(html[:position] + tfoot + html[position:])

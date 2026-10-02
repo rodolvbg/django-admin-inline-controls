@@ -345,6 +345,11 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
   to keep in sync. On stacked inlines, with `inline_footer_tfoot = False`,
   or when a value's column isn't a column of the table, they are a summary
   line in the footer ("Total: Pages 3250").
+- **In the add view** there are no saved rows to aggregate yet: tabular
+  inlines get the same `<tfoot>`, labels and `data-*` attributes with empty
+  values (`data-value=""`), for your JS to fill in from the new rows if you
+  want; `get_inline_footer_rows(request, obj)` gets `obj=None`. Stacked
+  inlines show nothing until the object is saved.
 
 #### Changing how they look
 
@@ -504,7 +509,7 @@ you replace a block's markup (`{{ block.super }}` keeps the original).
 | `toolbar` | Includes `inline_controls_toolbar_template`. |
 | `inline` | Includes the inline's own template. |
 | `footer` | Includes `inline_controls_footer_template`. |
-| `inline_without_controls` | What is rendered when the controls are off (the add view). |
+| `inline_without_controls` | What is rendered when the controls are off (the add view): the inline and, if it has footer rows, their empty `<tfoot>`. |
 
 **`toolbar.html`**
 

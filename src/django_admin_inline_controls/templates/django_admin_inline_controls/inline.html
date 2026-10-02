@@ -27,7 +27,8 @@
     {% endblock container %}
   {% else %}
     {% block inline_without_controls %}
-      {% include opts.inline_controls_inner_template %}
+      {# The add view: the footer rows' <tfoot> has no values yet. #}
+      {% inline_controls_render_inline opts.inline_controls_inner_template %}
     {% endblock inline_without_controls %}
   {% endif %}
 {% endwith %}

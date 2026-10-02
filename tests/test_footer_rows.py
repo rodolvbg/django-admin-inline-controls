@@ -419,3 +419,61 @@ def test_check_tfoot_type():
     ids = [e.id for e in make_inline(inline_footer_tfoot="yes").check()]
 
     assert "admin_inline_controls.E017" in ids
+
+
+# The add view ------------------------------------------------------------------
+
+
+def test_add_view_renders_the_tfoot_without_values(admin_client, db):
+    html = admin_client.get(reverse("admin:demo_author_add")).content.decode()
+
+    # Books (two rows) and articles (one): the structure, no values.
+    assert html.count('<tfoot class="inline-controls-tfoot">') == 2
+    assert (
+        'data-footer-key="0:pages" data-footer-row="Total" data-column="pages" '
+        'data-value=""></span>'
+    ) in html
+    assert 'data-footer-key="1:pages" data-footer-row="Average"' in html
+    assert 'data-footer-key="0:words" data-footer-row="Total"' in html
+    # No controls, and the stacked inline (no table) gets no summary line.
+    assert "data-inline-controls" not in html
+    assert "inline-controls-footer-rows" not in html
+
+
+def test_add_view_asks_the_hook_for_the_rows_with_no_object(get_request):
+    from django_admin_inline_controls.controls import empty_footer_rows
+
+    seen = []
+
+    class Inline(InlineControlsMixin, admin.TabularInline):
+        model = Book
+
+        def get_inline_footer_rows(self, request, obj):
+            seen.append(obj)
+            return [("Total", {"pages": Sum("pages"), "not_a_field": Sum("pages")})]
+
+    request = get_request()
+    rows = empty_footer_rows(Inline(Author, admin.site), request)
+
+    assert seen == [None]
+    assert [
+        (row.label, [(c.column, c.column_label, c.value, c.raw) for c in row.cells])
+        for row in rows
+    ] == [
+        ("Total", [("pages", "Pages", "", ""), ("not_a_field", "not_a_field", "", "")])
+    ]
+    assert empty_footer_rows(make_inline(), request) == []
+
+
+def test_add_view_without_the_tfoot(admin_client, db, settings):
+    from demo.admin import ArticleInline, BookInline
+
+    for inline in (BookInline, ArticleInline):
+        inline.inline_footer_tfoot = False
+    try:
+        html = admin_client.get(reverse("admin:demo_author_add")).content.decode()
+    finally:
+        for inline in (BookInline, ArticleInline):
+            inline.inline_footer_tfoot = True
+
+    assert "inline-controls-tfoot" not in html
