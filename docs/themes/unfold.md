@@ -29,7 +29,7 @@ dark mode:
 - the footer rows go in the table under Unfold's "Add another";
 - Unfold's "Add another" and delete buttons keep working after the inline
   is refreshed (`js/contrib/unfold.js`).
-- row actions (`inline_row_actions`) are styled like Unfold's buttons.
+- row actions (`inline_actions`) are styled like Unfold's buttons.
 
 Paginate with `inline_per_page`: Unfold's own `per_page` would paginate the
 inline a second time (`admin_inline_controls.E104`). Unfold's `tab` and
@@ -38,8 +38,8 @@ inline a second time (`admin_inline_controls.E104`). Unfold's `tab` and
 
 ## Screenshots
 
-A tabular inline, sorted by a column, with rows selected and the footer
-rows:
+A tabular inline, sorted by a column, with rows selected, the row actions
+(View, Feature, Delete) and the footer rows:
 
 ![Tabular inline with Unfold](unfold/tabular.png)
 

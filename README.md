@@ -9,7 +9,7 @@
 Pagination, filtering and sortable columns for Django admin inlines —
 without leaving the change form.
 
-![A tabular inline with an action menu and two selected rows, filters, sorting by pages, Total and Average rows, page links and the Save books button](docs/screenshots/hero.png)
+![A tabular inline with an action menu and two selected rows, filters, sorting by pages, View/Feature/Delete buttons on each row, Total and Average rows, page links and the Save books button](docs/screenshots/hero.png)
 
 - **Pagination**: page links, or infinite scroll that appends rows as you
   reach the end of the inline.
@@ -88,8 +88,8 @@ shareable and several inlines never clash.
 | `inline_filter_form` | `None` | Your own filter `forms.Form`. |
 | `inline_controls_ajax` | `True` | Refresh the inline in place instead of reloading the page. |
 | `inline_save_button` | `False` | Show a button that saves only this inline. See [Saving only the inline](#saving-only-the-inline). |
-| `inline_actions` | `()` | Actions for the selected rows. See [Inline actions](#inline-actions). |
-| `inline_row_actions` | `()` | Buttons on each saved row. See [Row actions](#row-actions). |
+| `inline_bulk_actions` | `()` | Actions for the selected rows. See [Bulk actions](#bulk-actions). |
+| `inline_actions` | `()` | Buttons on each saved row, as in django-inline-actions. See [Row actions](#row-actions). |
 | `inline_footer_rows` | `()` | Rows of totals, averages… below the table. See [Footer rows](#footer-rows). |
 | `inline_footer_scope` | `"filtered"` | What the footer rows add up: `"filtered"` or `"page"`. |
 | `inline_footer_tfoot` | `True` | Render the footer rows in the table's `<tfoot>` (tabular inlines); `False` shows them as a summary line. |
@@ -217,7 +217,7 @@ appears in the inline's footer, next to the pagination.
    everything.
 5. Not available on nested_admin inlines (`admin_inline_controls.E102`).
 
-### Inline actions
+### Bulk actions
 
 Like `ModelAdmin.actions`, for the rows of one inline:
 
@@ -233,7 +233,7 @@ from django_admin_inline_controls.mixins import (
 class BookInline(InlineControlsMixin, admin.TabularInline):
     model = Book
     inline_per_page = 20
-    inline_actions = ["mark_published", "export_csv", "delete_selected"]
+    inline_bulk_actions = ["mark_published", "export_csv", "delete_selected"]
 
     @inline_action(
         permissions=["change"],
@@ -278,7 +278,7 @@ class AuthorAdmin(InlineControlsAdminMixin, admin.ModelAdmin):
 **Writing actions**
 
 - Same signature as changelist actions: `action(inline, request,
-  queryset)`. Entries of `inline_actions` can be method names, callables or
+  queryset)`. Entries of `inline_bulk_actions` can be method names, callables or
   `"delete_selected"`. The parent object is `request.inline_controls_parent`.
 - `@inline_action` is `@admin.action` (`permissions`, `description`) plus
   `confirmation`: a prompt shown before running. `description` and
@@ -309,14 +309,20 @@ inlines (`admin_inline_controls.E103`).
 ### Row actions
 
 Buttons on each saved row, in an **Actions** column: no selection, no menu,
-no "Go".
+no "Go". The API is [django-inline-actions](https://github.com/escaped/django-inline-actions)'s
+— `inline_actions`, `get_inline_actions(request, obj)`, `ViewAction`,
+`DeleteAction`, `(request, obj, parent_obj=None)` — so its inlines move
+here by changing the imports.
 
 ![Row actions: View, Feature/Unfeature and Delete on each row](docs/screenshots/row-actions.png)
 
 ```python
-class BookInline(InlineControlsMixin, admin.TabularInline):
+from django_admin_inline_controls.actions import DefaultActionsMixin
+
+
+class BookInline(DefaultActionsMixin, InlineControlsMixin, admin.TabularInline):
     model = Book
-    inline_row_actions = ["view", "toggle_featured", "delete"]
+    inline_actions = ["toggle_featured"]  # plus View and Delete
 
     def toggle_featured(self, request, obj, parent_obj=None):
         obj.featured = not obj.featured
@@ -327,35 +333,48 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
         return "Unfeature" if obj.featured else "Feature"
 ```
 
-- **Built-in:** `"view"` (a link to the row's change view, when its model
-  has one on the site and the user may view it) and `"delete"` (asks
-  "Delete “Book 01”? This cannot be undone.", deletes it like
-  `delete_selected` and records it in the parent's history; needs the
-  delete permission).
+- **`inline_actions`** lists method names or callables, and is gathered
+  from every class of the inline (bases first): mixins add theirs.
+  `inline_actions = None` removes the column.
+- **Built-in:** the mixins `ViewAction` (`view_action`: a link to the row's
+  change view, when its model has one on the site and the user may view
+  it), `DeleteAction` (`delete_action`: asks "Delete “Book 01”? This cannot
+  be undone.", deletes it like `delete_selected` and records it in the
+  parent's history; needs the delete permission) and `DefaultActionsMixin`
+  (both). Without a mixin, list `"view"` / `"delete"`.
 - **Your own**, as methods or callables, in either form:
-  - `action(self, request, obj, parent_obj=None)` for one row — the
-    signature of [django-inline-actions](https://github.com/escaped/django-inline-actions),
-    so its actions can be moved here as they are;
-  - `action(self, request, queryset)`, like an [inline action](#inline-actions)
+  - `action(self, request, obj, parent_obj=None)` for one row;
+  - `action(self, request, queryset)`, like a [bulk action](#bulk-actions)
     (`@inline_action`, `permissions`, `confirmation`…), run on a queryset
     with only that row: the same function can be in both lists.
 - **Per row:** the label, CSS classes and HTML attributes come from the
   function's `short_description`, `css_classes` and `attribute_properties`
   (a dict, escaped, or a string), or from `get_<action>_label(obj)`,
   `get_<action>_css(obj)` and `get_<action>_attr(obj)` on the inline.
-  Override `get_inline_row_actions(request, obj)` to offer some actions on
+  Override `get_inline_actions(request, obj)` to offer some actions on
   some rows only (`obj` is the row; the parent is
-  `request.inline_controls_parent`).
-- They return what inline actions do: `None` re-renders the inline with
-  the messages from `self.message_user()` (shown in its footer), a file is
+  `request.inline_controls_parent`), as `DeleteAction` does.
+- They return what bulk actions do: `None` re-renders the inline with the
+  messages from `self.message_user()` (shown in its footer), a file is
   downloaded, a redirect is followed.
 - The buttons are rendered by the server, in a read-only column added to
-  the inline's fields (`inline_controls_row_actions`; put it in your
-  `fields` or `fieldsets` to place it yourself), and shown once the JS is
-  ready. Its template is `inline_row_actions_template`
+  the inline's fields (`render_inline_actions`, as in django-inline-actions;
+  put it in your `fields` or `fieldsets` to place it yourself), and shown
+  once the JS is ready. Its template is `inline_actions_template`
   (`django_admin_inline_controls/row_actions.html`).
 
-**Requirements:** as for inline actions, `InlineControlsAdminMixin` on the
+**Coming from django-inline-actions:** change
+`inline_actions.admin.InlineActionsMixin` for `InlineControlsMixin`,
+`inline_actions.actions` for `django_admin_inline_controls.actions`, and put
+`InlineControlsAdminMixin` on the parent `ModelAdmin` instead of
+`InlineActionsModelAdminMixin`. The actions run without submitting the
+whole change form (unsaved changes elsewhere on the page are kept), only
+the inline is refreshed, and each action's `permissions` are checked by the
+server before it runs. Buttons on the changelist's rows aren't covered:
+keep `InlineActionsModelAdminMixin` for those, next to
+`InlineControlsAdminMixin` (they don't clash on a `ModelAdmin`).
+
+**Requirements:** as for bulk actions, `InlineControlsAdminMixin` on the
 parent `ModelAdmin` (`admin_inline_controls.E019`); not available on
 nested_admin inlines (`admin_inline_controls.E105`). They only appear in
 the change view, once the parent exists.
@@ -502,7 +521,7 @@ class BookInline(NestedInlineControlsMixin, nested_admin.NestedTabularInline):
 
 nested_admin keeps its own client-side formset state, so with it filters,
 sorting and page links reload the page instead of swapping the inline, and
-infinite scroll, the save-inline button and inline actions are not
+infinite scroll, the save-inline button and bulk and row actions are not
 available.
 
 ### Themes
@@ -682,10 +701,10 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E006` | `inline_ordering_fields` is not a list, tuple or dict. |
 | `admin_inline_controls.E007` | An `inline_ordering_fields` column starts with `-` or contains a comma. |
 | `admin_inline_controls.E008` | `inline_save_button = True` but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
-| `admin_inline_controls.E009` | An `inline_actions` entry is not a method of the inline, a callable or a built-in action. |
-| `admin_inline_controls.E010` | `inline_actions` is set but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
-| `admin_inline_controls.E018` | An `inline_row_actions` entry is not a method of the inline, a callable or a built-in row action. |
-| `admin_inline_controls.E019` | `inline_row_actions` is set but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
+| `admin_inline_controls.E009` | An `inline_bulk_actions` entry is not a method of the inline, a callable or a built-in action. |
+| `admin_inline_controls.E010` | `inline_bulk_actions` is set but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
+| `admin_inline_controls.E018` | An `inline_actions` entry is not a method of the inline, a callable or a built-in row action. |
+| `admin_inline_controls.E019` | `inline_actions` is set but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
 | `admin_inline_controls.E011` | `inline_controls_selectors` is not a dict. |
 | `admin_inline_controls.E012` | An `inline_controls_selectors` key is unknown, or its value is not a selector or a non-empty list of selectors. |
 | `admin_inline_controls.E013` | `inline_footer_rows` is not a list of `(label, {column: value})` pairs. |
@@ -695,16 +714,16 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E017` | `inline_footer_tfoot` is not `True` or `False`. |
 | `admin_inline_controls.E101` | `inline_pagination = "infinite"` on a nested_admin inline. |
 | `admin_inline_controls.E102` | `inline_save_button = True` on a nested_admin inline. |
-| `admin_inline_controls.E103` | `inline_actions` on a nested_admin inline. |
+| `admin_inline_controls.E103` | `inline_bulk_actions` on a nested_admin inline. |
 | `admin_inline_controls.E104` | Unfold's `per_page` on an inline with `UnfoldInlineControlsMixin`. |
-| `admin_inline_controls.E105` | `inline_row_actions` on a nested_admin inline. |
+| `admin_inline_controls.E105` | `inline_actions` on a nested_admin inline. |
 
 ## JavaScript files
 
 Each inline loads only the scripts it uses, through its `media`: `core.js`
 (pagination, filters, sorting, placing the controls) always, `save.js`
-with `inline_save_button`, `actions.js` with `inline_actions` or
-`inline_row_actions`, and
+with `inline_save_button`, `actions.js` with `inline_bulk_actions` or
+`inline_actions`, and
 `contrib/unfold.js` with `UnfoldInlineControlsMixin`. The admin merges the
 media of every inline on the page, so each file loads at most once.
 

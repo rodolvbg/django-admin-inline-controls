@@ -11,14 +11,14 @@
       {% block toolbar_start %}{% endblock %}
 
       {% block actions %}
-        {% if controls.actions %}
+        {% if controls.bulk_actions %}
           <div class="inline-controls-actions">
             {% block action_menu %}
               <label>
                 {% block action_label %}{% translate "Action:" %}{% endblock %}
                 <select name="action" form="{{ controls.actions_form_id }}" data-inline-controls-action>
                   {% block action_empty_option %}<option value="">---------</option>{% endblock %}
-                  {% for action in controls.actions %}
+                  {% for action in controls.bulk_actions %}
                     {% block action_option %}<option value="{{ action.name }}">{{ action.description }}</option>{% endblock %}
                   {% endfor %}
                 </select>

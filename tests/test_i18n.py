@@ -124,7 +124,7 @@ def test_actions_and_js_messages_in_spanish(spanish_page):
 
     assert "Eliminar books seleccionado/s" in html  # the admin's own wording
     assert config["messages"]["selected"] == "%(sel)s de %(cnt)s seleccionados"
-    assert config["actions"][2]["confirmation"] == (
+    assert config["bulkActions"][2]["confirmation"] == (
         "¿Eliminar %(count)s books seleccionados? No se puede deshacer."
     )
 

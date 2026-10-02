@@ -5,7 +5,7 @@ from django.db.models import Avg, Count, Sum
 from django.db.models.functions import Lower
 from django.http import HttpResponse
 
-from django_admin_inline_controls.actions import inline_action
+from django_admin_inline_controls.actions import DefaultActionsMixin, inline_action
 from django_admin_inline_controls.mixins import (
     InlineControlsAdminMixin,
     InlineControlsMixin,
@@ -14,7 +14,7 @@ from django_admin_inline_controls.mixins import (
 from .models import Article, Author, Book
 
 
-class BookInline(InlineControlsMixin, admin.TabularInline):
+class BookInline(DefaultActionsMixin, InlineControlsMixin, admin.TabularInline):
     model = Book
     extra = 0
     fields = ["title", "status", "published", "pages", "featured"]
@@ -31,8 +31,10 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
         "published__gte",
     ]
     inline_save_button = True
-    inline_actions = ["mark_published", "export_csv", "delete_selected"]
-    inline_row_actions = ["view", "toggle_featured", "delete"]
+    inline_bulk_actions = ["mark_published", "export_csv", "delete_selected"]
+    # Row actions, as in django-inline-actions: View and Delete come from
+    # DefaultActionsMixin.
+    inline_actions = ["toggle_featured"]
     inline_footer_rows = [
         ("Total", {"title": Count("pk"), "pages": Sum("pages")}),
         ("Average", {"pages": Avg("pages")}),
@@ -75,7 +77,7 @@ class ArticleInline(InlineControlsMixin, admin.TabularInline):
     inline_pagination = "infinite"
     inline_ordering_fields = ["title", "words"]
     inline_save_button = True
-    inline_actions = ["delete_selected"]
+    inline_bulk_actions = ["delete_selected"]
     inline_footer_rows = [("Total", {"words": Sum("words")})]
 
 

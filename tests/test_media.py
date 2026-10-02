@@ -29,8 +29,10 @@ def test_only_the_core_script_by_default():
 
 def test_features_add_their_scripts():
     assert inline_js(inline_save_button=True) == [CORE, SAVE]
-    assert inline_js(inline_actions=["delete_selected"]) == [CORE, ACTIONS]
-    assert inline_js(inline_save_button=True, inline_actions=["delete_selected"]) == [
+    assert inline_js(inline_bulk_actions=["delete_selected"]) == [CORE, ACTIONS]
+    assert inline_js(
+        inline_save_button=True, inline_bulk_actions=["delete_selected"]
+    ) == [
         CORE,
         SAVE,
         ACTIONS,
@@ -45,7 +47,7 @@ def test_several_inlines_merge_without_duplicates():
         + type(
             "B",
             (InlineControlsMixin, admin.TabularInline),
-            {"model": Book, "inline_actions": ["delete_selected"]},
+            {"model": Book, "inline_bulk_actions": ["delete_selected"]},
         )(Author, admin.site).media
         + type(
             "C",
@@ -53,7 +55,7 @@ def test_several_inlines_merge_without_duplicates():
             {
                 "model": Book,
                 "inline_save_button": True,
-                "inline_actions": ["delete_selected"],
+                "inline_bulk_actions": ["delete_selected"],
             },
         )(Author, admin.site).media
     )

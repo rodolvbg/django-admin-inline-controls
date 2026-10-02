@@ -435,22 +435,24 @@ class InlineControls:
     # Actions ---------------------------------------------------------------
 
     @cached_property
-    def actions(self) -> list[Any]:
-        if not self.inline.inline_actions or self._endpoint("action") is None:
+    def bulk_actions(self) -> list[Any]:
+        if not self.inline.inline_bulk_actions or self._endpoint("action") is None:
             return []
-        return list(self.inline.get_inline_actions(self.request, self.parent).values())
+        return list(
+            self.inline.get_inline_bulk_actions(self.request, self.parent).values()
+        )
 
     @cached_property
     def has_row_actions(self) -> bool:
         """Whether the rows have action buttons (and their endpoint)."""
-        return bool(self.inline.inline_row_actions) and (
-            self._endpoint("action") is not None
-        )
+        return self.inline.has_inline_actions and (self._endpoint("action") is not None)
 
     @property
     def action_url(self) -> str | None:
         return (
-            self._endpoint("action") if self.actions or self.has_row_actions else None
+            self._endpoint("action")
+            if self.bulk_actions or self.has_row_actions
+            else None
         )
 
     @property
@@ -466,7 +468,7 @@ class InlineControls:
 
     @property
     def has_toolbar(self) -> bool:
-        return bool(self.filter_form or self.ordering_columns or self.actions)
+        return bool(self.filter_form or self.ordering_columns or self.bulk_actions)
 
     @property
     def has_footer(self) -> bool:
@@ -565,12 +567,12 @@ class InlineControls:
                 "actionUrl": self.action_url,
                 "rowActions": self.has_row_actions,
                 "actionsFormId": self.actions_form_id,
-                "actions": [
+                "bulkActions": [
                     {
                         "name": action.name,
                         "confirmation": action.confirmation,
                     }
-                    for action in self.actions
+                    for action in self.bulk_actions
                 ],
                 "pkName": self.inline.model._meta.pk.name,
                 "selectors": self.selectors,

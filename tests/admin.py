@@ -66,7 +66,7 @@ class ThemedBookInline(InlineControlsMixin, admin.TabularInline):
     template = "custom/themed_tabular.html"
     inline_per_page = 5
     inline_ordering_fields = ["pages"]
-    inline_actions = ["delete_selected"]
+    inline_bulk_actions = ["delete_selected"]
     inline_controls_selectors = {
         "container": ".card",
         "heading": ".card-title",

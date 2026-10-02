@@ -42,12 +42,12 @@ def test_action_config(admin_client, author):
 
     assert data["actionUrl"] == action_url(author)
     assert data["pkName"] == "id"
-    assert [action["name"] for action in data["actions"]] == [
+    assert [action["name"] for action in data["bulkActions"]] == [
         "mark_published",
         "export_csv",
         "delete_selected",
     ]
-    delete = data["actions"][2]
+    delete = data["bulkActions"][2]
     assert delete["confirmation"] == (
         "Delete %(count)s selected books? This cannot be undone."
     )
@@ -228,7 +228,7 @@ def test_actions_are_filtered_by_permission(staff_client, author):
     client = staff_client("view_author", "view_book", "change_book")
     data = config(client.get(change_url(author)))
 
-    assert [action["name"] for action in data["actions"]] == [
+    assert [action["name"] for action in data["bulkActions"]] == [
         "mark_published",
         "export_csv",
     ]
@@ -248,7 +248,7 @@ def test_actions_without_the_endpoint_are_hidden(admin_user, rf, author):
 
     class BookInline(InlineControlsMixin, admin.TabularInline):
         model = Book
-        inline_actions = ["delete_selected"]
+        inline_bulk_actions = ["delete_selected"]
 
     request = rf.get("/")
     request.user = admin_user
@@ -256,7 +256,7 @@ def test_actions_without_the_endpoint_are_hidden(admin_user, rf, author):
         instance=author, prefix="books"
     )
 
-    assert formset.inline_controls.actions == []
+    assert formset.inline_controls.bulk_actions == []
     assert formset.inline_controls.action_url is None
     assert formset.inline_controls.has_toolbar is False
 
@@ -280,10 +280,10 @@ def decorated(inline, request, queryset):
 
 def test_action_resolution_and_descriptions(admin_user, rf):
     inline = CallableActionInline(Author, admin.site)
-    inline.inline_actions = ["plain", standalone, decorated, "delete_selected"]
+    inline.inline_bulk_actions = ["plain", standalone, decorated, "delete_selected"]
     request = rf.get("/")
     request.user = admin_user
-    actions = inline.get_inline_actions(request, None)
+    actions = inline.get_inline_bulk_actions(request, None)
 
     assert list(actions) == ["plain", "standalone", "decorated", "delete_selected"]
     assert actions["standalone"].description == "Standalone"
@@ -318,7 +318,7 @@ def make_inline(**attrs):
 
 
 def test_check_unknown_action():
-    inline_class = make_inline(inline_actions=["nope", 3])
+    inline_class = make_inline(inline_bulk_actions=["nope", 3])
     ids = [e.id for e in inline_class(Author, admin.site).check()]
 
     assert ids.count("admin_inline_controls.E009") == 2
@@ -326,7 +326,7 @@ def test_check_unknown_action():
 
 def test_check_actions_require_admin_mixin():
     site = admin.AdminSite(name="actions_check_site")
-    inline_class = make_inline(inline_actions=["delete_selected"])
+    inline_class = make_inline(inline_bulk_actions=["delete_selected"])
 
     @admin.register(Author, site=site)
     class AuthorAdmin(admin.ModelAdmin):
@@ -342,7 +342,7 @@ def test_nested_rejects_actions():
 
     class BookInline(NestedInlineControlsMixin, nested_admin.NestedTabularInline):
         model = Book
-        inline_actions = ["delete_selected"]
+        inline_bulk_actions = ["delete_selected"]
 
     ids = [e.id for e in BookInline(Author, admin.site).check()]
     assert "admin_inline_controls.E103" in ids

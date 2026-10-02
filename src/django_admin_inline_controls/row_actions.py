@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
@@ -36,22 +35,16 @@ from django.utils.translation import gettext_lazy as _
 
 from django_admin_inline_controls.actions import delete_selected, inline_action
 
-#: The request and parent object an inline is rendered for, by inline: the
-#: row actions' column only gets the row. A context variable, not an
-#: attribute, since admin instances are shared between requests.
-RENDER_CONTEXT: ContextVar[dict[int, tuple[HttpRequest, Any]] | None] = ContextVar(
-    "inline_controls_render_context", default=None
-)
-
 
 def set_render_context(inline: Any, request: HttpRequest, parent: Any) -> None:
-    context = dict(RENDER_CONTEXT.get() or {})
-    context[id(inline)] = (request, parent)
-    RENDER_CONTEXT.set(context)
+    """Remember the request and parent object the inline is rendered for: the
+    actions' column only gets the row. On the instance, which the admin
+    creates for each request (``get_inline_instances()``)."""
+    inline._inline_controls_render = (request, parent)
 
 
 def get_render_context(inline: Any) -> tuple[HttpRequest | None, Any]:
-    return (RENDER_CONTEXT.get() or {}).get(id(inline), (None, None))
+    return getattr(inline, "_inline_controls_render", (None, None))
 
 
 @inline_action(
@@ -75,7 +68,11 @@ def view(inline: Any, request: HttpRequest, obj: Any, parent_obj: Any = None) ->
     return HttpResponseRedirect(url)
 
 
-#: Row actions that can be referenced by name in ``inline_row_actions``.
+#: Rendered as a link to the row's change view, not a button.
+view.inline_actions_link = True
+
+
+#: Row actions that can be referenced by name in ``inline_actions``.
 BUILTIN_ROW_ACTIONS: dict[str, Callable[..., Any]] = {"delete": delete, "view": view}
 
 
@@ -151,7 +148,9 @@ def row_action_spec(
         css_classes=str(css),
         attrs=attrs,
         confirmation=None if confirmation is None else str(confirmation) % names,
-        url=change_url(inline, obj) if function is view else None,
+        url=change_url(inline, obj)
+        if getattr(function, "inline_actions_link", False)
+        else None,
     )
 
 

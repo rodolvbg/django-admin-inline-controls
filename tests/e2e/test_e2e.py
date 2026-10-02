@@ -375,13 +375,13 @@ def test_row_actions(change_page: Page, author):
 
     page.once("dialog", lambda dialog: dialog.accept())
     page.locator("#books-group tr.has_original").first.locator(
-        '[data-inline-controls-row-action="delete"]'
+        '[data-inline-controls-row-action="delete_action"]'
     ).click()
     expect(status).to_have_text("Deleted 1 book.")
     assert not Book.objects.filter(author=author, title="Book 01").exists()
 
     page.locator("#books-group tr.has_original").first.locator(
-        '[data-inline-controls-row-link="view"]'
+        '[data-inline-controls-row-link="view_action"]'
     ).click()
     expect(page).to_have_url(re.compile(r"/admin/demo/book/\d+/change/$"))
 

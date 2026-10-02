@@ -177,7 +177,9 @@ def test_unfold_selectors_under_the_inline_own(unfold_mixin, get_request):
 
 
 def test_unfold_media(unfold_mixin):
-    media = str(unfold_inline(unfold_mixin, inline_actions=["delete_selected"]).media)
+    media = str(
+        unfold_inline(unfold_mixin, inline_bulk_actions=["delete_selected"]).media
+    )
 
     for path in ["js/core.js", "js/actions.js", "js/contrib/unfold.js"]:
         assert f"django_admin_inline_controls/{path}" in media

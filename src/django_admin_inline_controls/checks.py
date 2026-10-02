@@ -167,12 +167,16 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
     missing_admin_mixin = parent_admin is not None and not isinstance(
         parent_admin, InlineControlsAdminMixin
     )
-    for option, error_id in (
-        ("inline_save_button", "admin_inline_controls.E008"),
-        ("inline_actions", "admin_inline_controls.E010"),
-        ("inline_row_actions", "admin_inline_controls.E019"),
+    for option, enabled, error_id in (
+        ("inline_save_button", inline.inline_save_button, "admin_inline_controls.E008"),
+        (
+            "inline_bulk_actions",
+            inline.inline_bulk_actions,
+            "admin_inline_controls.E010",
+        ),
+        ("inline_actions", inline.has_inline_actions, "admin_inline_controls.E019"),
     ):
-        if getattr(inline, option) and missing_admin_mixin:
+        if enabled and missing_admin_mixin:
             error(
                 f"'{name}.{option}' requires "
                 f"'{type(parent_admin).__qualname__}' to inherit from "
@@ -180,26 +184,26 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
                 error_id,
             )
 
-    for action in inline.inline_actions:
+    for action in inline.inline_bulk_actions:
+        try:
+            _, func = inline._resolve_inline_bulk_action(action)
+        except AttributeError:
+            func = None
+        if not callable(func):
+            error(
+                f"'{name}.inline_bulk_actions' contains {action!r}, which is not a "
+                f"method of '{name}', a callable, or a built-in action.",
+                "admin_inline_controls.E009",
+            )
+
+    for action in inline.inline_actions or ():
         try:
             _, func = inline._resolve_inline_action(action)
         except AttributeError:
             func = None
         if not callable(func):
             error(
-                f"'{name}.inline_actions' contains {action!r}, which is not a "
-                f"method of '{name}', a callable, or a built-in action.",
-                "admin_inline_controls.E009",
-            )
-
-    for action in inline.inline_row_actions:
-        try:
-            _, func = inline._resolve_inline_row_action(action)
-        except AttributeError:
-            func = None
-        if not callable(func):
-            error(
-                f"'{name}.inline_row_actions' contains {action!r}, which is not "
+                f"'{name}.inline_actions' contains {action!r}, which is not "
                 f"a method of '{name}', a callable, or a built-in row action "
                 "('view', 'delete').",
                 "admin_inline_controls.E018",

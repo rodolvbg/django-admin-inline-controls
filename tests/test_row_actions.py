@@ -45,7 +45,7 @@ def test_row_actions_column_is_rendered(admin_client, author):
     html = response.content.decode()
     book = first_book(author)
 
-    assert 'class="column-inline_controls_row_actions' in html
+    assert 'class="column-render_inline_actions' in html
     # Hidden until the JS shows them; one set per saved row on the page.
     assert html.count("data-inline-controls-row-actions hidden") == 10
     view_url = reverse("admin:demo_book_change", args=[book.pk])
@@ -70,7 +70,7 @@ def test_feature_label_follows_the_row(admin_client, author):
 def test_no_row_actions_in_the_add_view(admin_client, db):
     html = admin_client.get(reverse("admin:demo_author_add")).content.decode()
 
-    assert "inline_controls_row_actions" not in html
+    assert "render_inline_actions" not in html
     assert "data-inline-controls-row-action" not in html
 
 
@@ -79,7 +79,7 @@ def test_row_actions_are_filtered_by_permission(staff_client, author):  # noqa: 
     html = client.get(change_url(author)).content.decode()
 
     assert 'data-inline-controls-row-action="toggle_featured"' in html
-    assert 'data-inline-controls-row-action="delete"' not in html
+    assert 'data-inline-controls-row-action="delete_action"' not in html
 
 
 # Running ------------------------------------------------------------------------
@@ -99,7 +99,7 @@ def test_one_row_action(admin_client, author):
 
 def test_delete_row_action(admin_client, author):
     book = first_book(author)
-    response = row_run(admin_client, author, "delete", book.pk)
+    response = row_run(admin_client, author, "delete_action", book.pk)
 
     assert status(response) == "done"
     assert not Book.objects.filter(pk=book.pk).exists()
@@ -110,7 +110,7 @@ def test_delete_row_action(admin_client, author):
 
 def test_view_row_action_redirects(admin_client, author):
     book = first_book(author)
-    response = row_run(admin_client, author, "view", book.pk)
+    response = row_run(admin_client, author, "view_action", book.pk)
 
     assert response.status_code == 302
     assert response["Location"] == reverse("admin:demo_book_change", args=[book.pk])
@@ -120,7 +120,7 @@ def test_forbidden_or_unknown_row_actions(staff_client, author, other_author):  
     book = first_book(author)
     client = staff_client("view_author", "view_book", "change_book")
 
-    assert row_run(client, author, "delete", book.pk).status_code == 400
+    assert row_run(client, author, "delete_action", book.pk).status_code == 400
     assert Book.objects.filter(pk=book.pk).exists()
     assert row_run(client, author, "nope", book.pk).status_code == 400
     # Another parent's row, or no valid row at all.
@@ -166,7 +166,7 @@ def test_row_action_specs_and_hooks(admin_user, rf, author):
         return 'data-x="1"'
 
     inline = make_inline(
-        inline_row_actions=[one_row, "on_queryset"],
+        inline_actions=[one_row, "on_queryset"],
         on_queryset=on_queryset,
         get_on_queryset_label=get_on_queryset_label,
         get_on_queryset_css=get_on_queryset_css,
@@ -176,7 +176,7 @@ def test_row_action_specs_and_hooks(admin_user, rf, author):
     request = rf.get("/")
     request.user = admin_user
 
-    specs = inline.get_inline_row_action_specs(request, author, book)
+    specs = inline.get_inline_action_specs(request, author, book)
     first, second = specs["one_row"], specs["on_queryset"]
     assert (first.label, first.css_classes, str(first.attrs)) == (
         "One book",
@@ -190,8 +190,8 @@ def test_row_action_specs_and_hooks(admin_user, rf, author):
         'data-x="1"',
     )
     assert second.confirmation == "Sure?"
-    assert inline.get_inline_row_action_specs(request, author, None) == {}
-    assert inline.get_inline_row_action_specs(None, author, book) == {}
+    assert inline.get_inline_action_specs(request, author, None) == {}
+    assert inline.get_inline_action_specs(None, author, book) == {}
 
     # Each runs in the form it was written for.
     assert takes_one_row(one_row) and not takes_one_row(on_queryset)
@@ -207,11 +207,11 @@ def test_default_label_and_view_without_a_change_view(admin_user, rf, author):
         return None
 
     inline = make_inline(
-        site, inline_row_actions=["view", "publish_it"], publish_it=publish_it
+        site, inline_actions=["view", "publish_it"], publish_it=publish_it
     )
     request = rf.get("/")
     request.user = admin_user
-    specs = inline.get_inline_row_action_specs(request, author, first_book(author))
+    specs = inline.get_inline_action_specs(request, author, first_book(author))
 
     # Book has no change view on this site: no "view".
     assert list(specs) == ["publish_it"]
@@ -221,40 +221,39 @@ def test_default_label_and_view_without_a_change_view(admin_user, rf, author):
 
 
 def test_column_without_render_context(author):
-    inline = make_inline(inline_row_actions=["view"])
+    inline = make_inline(inline_actions=["view"])
 
     assert get_render_context(inline) == (None, None)
-    assert inline.inline_controls_row_actions(first_book(author)) == ""
+    assert inline.render_inline_actions(first_book(author)) == ""
 
 
 def test_column_is_added_to_fieldsets(admin_user, rf, author):
     inline = make_inline(
-        inline_row_actions=["view"], fieldsets=[(None, {"fields": ["title"]})]
+        inline_actions=["view"], fieldsets=[(None, {"fields": ["title"]})]
     )
     request = rf.get("/")
     request.user = admin_user
 
     assert inline.get_fieldsets(request, author) == [
-        (None, {"fields": ["title", "inline_controls_row_actions"]})
+        (None, {"fields": ["title", "render_inline_actions"]})
     ]
     assert inline.get_fieldsets(request, None) == [(None, {"fields": ["title"]})]
-    assert "inline_controls_row_actions" in inline.get_readonly_fields(request, author)
-    assert "inline_controls_row_actions" not in inline.get_readonly_fields(request)
+    assert "render_inline_actions" in inline.get_readonly_fields(request, author)
+    assert "render_inline_actions" not in inline.get_readonly_fields(request)
     # Not twice, when the column is listed already.
     listed = make_inline(
-        inline_row_actions=["view"],
-        fields=["title", "inline_controls_row_actions"],
-        readonly_fields=["inline_controls_row_actions"],
+        inline_actions=["view"],
+        fields=["title", "render_inline_actions"],
+        readonly_fields=["render_inline_actions"],
     )
-    assert listed.get_fields(request, author).count("inline_controls_row_actions") == 1
+    assert listed.get_fields(request, author).count("render_inline_actions") == 1
     assert (
-        listed.get_readonly_fields(request, author).count("inline_controls_row_actions")
-        == 1
+        listed.get_readonly_fields(request, author).count("render_inline_actions") == 1
     )
 
 
 def test_row_actions_load_the_actions_script():
-    media = str(make_inline(inline_row_actions=["view"]).media)
+    media = str(make_inline(inline_actions=["view"]).media)
 
     assert "django_admin_inline_controls/js/actions.js" in media
 
@@ -263,14 +262,14 @@ def test_row_actions_load_the_actions_script():
 
 
 def test_check_unknown_row_action():
-    ids = [e.id for e in make_inline(inline_row_actions=["nope", 3]).check()]
+    ids = [e.id for e in make_inline(inline_actions=["nope", 3]).check()]
 
     assert ids.count("admin_inline_controls.E018") == 2
 
 
 def test_check_row_actions_require_admin_mixin():
     site = admin.AdminSite(name="row_actions_check_site")
-    inline = make_inline(site, inline_row_actions=["view"])
+    inline = make_inline(site, inline_actions=["view"])
 
     @admin.register(Author, site=site)
     class AuthorAdmin(admin.ModelAdmin):
@@ -285,7 +284,117 @@ def test_nested_rejects_row_actions():
 
     class BookInline(NestedInlineControlsMixin, nested_admin.NestedTabularInline):
         model = Book
-        inline_row_actions = ["view"]
+        inline_actions = ["view"]
 
     ids = [e.id for e in BookInline(Author, admin.site).check()]
     assert "admin_inline_controls.E105" in ids
+
+
+# django-inline-actions' API ------------------------------------------------------
+
+
+def test_actions_are_gathered_from_every_class(admin_user, rf, author):
+    from django_admin_inline_controls.actions import (
+        DefaultActionsMixin,
+        DeleteAction,
+        ViewAction,
+    )
+
+    class Base(InlineControlsMixin, admin.TabularInline):
+        model = Book
+        inline_actions = ["one_row"]
+        one_row = one_row
+
+    class Child(ViewAction, Base):
+        inline_actions = ["one_row", "on_queryset"]
+        on_queryset = on_queryset
+
+    request = rf.get("/")
+    request.user = admin_user
+    child = Child(Author, admin.site)
+    # Bases first, each action once.
+    assert child.get_inline_actions(request, None) == [
+        "one_row",
+        "view_action",
+        "on_queryset",
+    ]
+
+    class Deleting(DeleteAction, InlineControlsMixin, admin.TabularInline):
+        model = Book
+
+    deleting = Deleting(Author, admin.site)
+    # Only get_inline_actions() adds it: the column is still there.
+    assert deleting.has_inline_actions
+    assert deleting.get_inline_actions(request, None) == ["delete_action"]
+
+    class Listed(DeleteAction, InlineControlsMixin, admin.TabularInline):
+        model = Book
+        inline_actions = ["delete_action"]
+
+    # Already listed: not twice.
+    listed = Listed(Author, admin.site)
+    assert listed.get_inline_actions(request, None) == ["delete_action"]
+
+    class Both(DefaultActionsMixin, InlineControlsMixin, admin.TabularInline):
+        model = Book
+
+    both = Both(Author, admin.site)
+    book = first_book(author)
+    specs = both.get_inline_action_specs(request, author, book)
+    assert list(specs) == ["view_action", "delete_action"]
+    assert specs["view_action"].url == reverse("admin:demo_book_change", args=[book.pk])
+    assert specs["view_action"].label == "View"
+    assert specs["delete_action"].confirmation == (
+        "Delete “Book 01”? This cannot be undone."
+    )
+
+    # Run like any other row action.
+    response = run_row_action(both, request, specs["view_action"], book, author)
+    assert response["Location"] == specs["view_action"].url
+    from django.contrib.messages.storage.fallback import FallbackStorage
+
+    request.session = {}
+    request._messages = FallbackStorage(request)
+    run_row_action(both, request, specs["delete_action"], book, author)
+    assert not Book.objects.filter(pk=book.pk).exists()
+
+
+def test_none_removes_the_column(admin_user, rf, author):
+    from django_admin_inline_controls.actions import ViewAction
+
+    class NoActions(ViewAction, InlineControlsMixin, admin.TabularInline):
+        model = Book
+        inline_actions = None
+
+    inline = NoActions(Author, admin.site)
+    request = rf.get("/")
+    request.user = admin_user
+
+    assert not inline.has_inline_actions
+    assert inline.get_inline_actions(request, None) == []
+    assert "render_inline_actions" not in inline.get_fields(request, author)
+    assert make_inline().has_inline_actions is False
+
+
+def test_demo_inline_actions_through_the_admin(admin_client, author):
+    # The demo's django-inline-actions style method, end to end.
+    book = first_book(author)
+    response = row_run(admin_client, author, "toggle_featured", book.pk)
+
+    assert status(response) == "done"
+
+
+def test_builtin_names_without_the_mixins(admin_user, rf, author):
+    from django.contrib.messages.storage.fallback import FallbackStorage
+
+    inline = make_inline(inline_actions=["view", "delete"])
+    request = rf.get("/")
+    request.user = admin_user
+    request.session = {}
+    request._messages = FallbackStorage(request)
+    book = first_book(author)
+    specs = inline.get_inline_action_specs(request, author, book)
+
+    assert specs["view"].url == reverse("admin:demo_book_change", args=[book.pk])
+    run_row_action(inline, request, specs["delete"], book, author)
+    assert not Book.objects.filter(pk=book.pk).exists()

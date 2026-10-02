@@ -324,7 +324,7 @@ describe("action checkboxes", () => {
             config({
                 actionUrl: "/action/",
                 actionsFormId: "books-inline-controls-actions",
-                actions: [{ name: "go", confirmation: null }],
+                bulkActions: [{ name: "go", confirmation: null }],
                 pkName: "id",
                 totalCount: 30,
                 messages: {
@@ -599,7 +599,7 @@ describe("Unfold markup", () => {
                 ],
                 actionUrl: "/action/",
                 actionsFormId: "books-inline-controls-actions",
-                actions: [{ name: "go", confirmation: null }],
+                bulkActions: [{ name: "go", confirmation: null }],
                 pkName: "id",
                 messages: {
                     ...config().messages,
@@ -673,7 +673,7 @@ describe("row actions", () => {
             config({
                 actionUrl: "/action/",
                 actionsFormId: "books-inline-controls-actions",
-                actions: [],
+                bulkActions: [],
                 rowActions: true,
                 pkName: "id",
                 messages: { ...config().messages, actionFailed: "Failed" },

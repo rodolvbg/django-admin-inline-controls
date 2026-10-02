@@ -1,6 +1,6 @@
 /*
- * django-admin-inline-controls: inline actions (inline_actions) and row
- * actions (inline_row_actions). Loaded after core.js, only by inlines that
+ * django-admin-inline-controls: bulk actions (inline_bulk_actions) and row
+ * actions (inline_actions). Loaded after core.js, only by inlines that
  * use them.
  */
 (() => {
@@ -10,7 +10,7 @@
 
     /** Whether the inline has bulk actions (the toolbar's select). */
     const hasBulkActions = (config) =>
-        Boolean(config.actionUrl) && (config.actions ?? []).length > 0;
+        Boolean(config.actionUrl) && (config.bulkActions ?? []).length > 0;
 
     const format = (template, values) =>
         template.replace(/%\((\w+)\)s/g, (_, key) => values[key]);
@@ -127,7 +127,7 @@
         if (state.loading || !config.actionUrl || !select || !form) {
             return;
         }
-        const action = config.actions.find(
+        const action = config.bulkActions.find(
             (item) => item.name === select.value,
         );
         const pks = selectedPks(root);
