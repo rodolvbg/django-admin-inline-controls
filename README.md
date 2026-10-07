@@ -9,7 +9,7 @@
 Pagination, filtering and sortable columns for Django admin inlines —
 without leaving the change form.
 
-![A tabular inline with an action menu and two selected rows, filters, sorting by pages, View/Feature/Delete buttons on each row, Total and Average rows, page links and the Save books button](https://github.com/rodolvbg/django-admin-inline-controls/blob/main/docs/screenshots/hero.png)
+![A tabular inline with an action menu and two selected rows, filters, sorting by pages, View/Feature/Delete buttons on each row, Total and Average rows, page links and the Save books button](docs/screenshots/hero.png)
 
 - **Pagination**: page links, or infinite scroll that appends rows as you
   reach the end of the inline.
@@ -171,7 +171,7 @@ class AuthorAdmin(InlineControlsAdminMixin, admin.ModelAdmin):
 A **"Save books"** button (named after the inline's `verbose_name_plural`)
 appears in the inline's footer, next to the pagination.
 
-![The "Save books" button after saving an edited row](https://github.com/rodolvbg/django-admin-inline-controls/blob/main/docs/screenshots/save-inline.png)
+![The "Save books" button after saving an edited row](docs/screenshots/save-inline.png)
 
 **How it works**
 
@@ -256,7 +256,7 @@ class AuthorAdmin(InlineControlsAdminMixin, admin.ModelAdmin):
     inlines = [BookInline]
 ```
 
-![Inline actions: row checkboxes, the action menu and the selection count](https://github.com/rodolvbg/django-admin-inline-controls/blob/main/docs/screenshots/actions.png)
+![Inline actions: row checkboxes, the action menu and the selection count](docs/screenshots/actions.png)
 
 **How it works**
 
@@ -314,7 +314,7 @@ no "Go". The API is [django-inline-actions](https://github.com/escaped/django-in
 `DeleteAction`, `(request, obj, parent_obj=None)` — so its inlines move
 here by changing the imports.
 
-![Row actions: View, Feature/Unfeature and Delete on each row](https://github.com/rodolvbg/django-admin-inline-controls/blob/main/docs/screenshots/row-actions.png)
+![Row actions: View, Feature/Unfeature and Delete on each row](docs/screenshots/row-actions.png)
 
 ```python
 from django_admin_inline_controls.actions import DefaultActionsMixin
@@ -396,7 +396,7 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
     ]
 ```
 
-![Total and Average rows below the Pages column](https://github.com/rodolvbg/django-admin-inline-controls/blob/main/docs/screenshots/footer-rows.png)
+![Total and Average rows below the Pages column](docs/screenshots/footer-rows.png)
 
 - Each row is a label and `{column: value}`. A value is an **aggregate**
   (`Sum`, `Avg`, `Count`, `Max`…, `filter=` included), a
@@ -526,7 +526,7 @@ available.
 
 ### Themes
 
-- [django-unfold](https://github.com/rodolvbg/django-admin-inline-controls/blob/main/docs/themes/unfold.md): `UnfoldInlineControlsMixin` (the
+- [django-unfold](docs/themes/unfold.md): `UnfoldInlineControlsMixin` (the
   `unfold` extra).
 
 ## Customizing templates
