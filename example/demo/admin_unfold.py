@@ -6,7 +6,7 @@ from unfold.sites import UnfoldAdminSite
 from django_admin_inline_controls.contrib.unfold import UnfoldInlineControlsMixin
 
 from . import admin as demo
-from .models import Author, Book
+from .models import Author, Book, Publisher
 
 site = UnfoldAdminSite(name="admin")
 
@@ -37,3 +37,10 @@ class BookAdmin(demo.BookAdmin, ModelAdmin):
 
 site.register(Author, AuthorAdmin)
 site.register(Book, BookAdmin)
+
+
+class PublisherAdmin(demo.PublisherAdmin, ModelAdmin):
+    pass
+
+
+site.register(Publisher, PublisherAdmin)

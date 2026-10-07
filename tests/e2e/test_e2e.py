@@ -353,6 +353,36 @@ def test_rows_loaded_later_get_checkboxes(change_page: Page):
     expect(page.locator("#articles-group .inline-controls-select")).to_have_count(20)
 
 
+def test_autocomplete_filter(change_page: Page, author):
+    from demo.models import Publisher
+
+    northwind = Publisher.objects.create(name="Northwind")
+    Publisher.objects.create(name="Quarto")
+    Book.objects.filter(author=author, title__in=["Book 01", "Book 02"]).update(
+        publisher=northwind
+    )
+    page = change_page
+    page.reload()  # with the publishers
+    page.evaluate("window.__noReload = true")
+    page.locator(
+        "#books-inline-controls .inline-controls-filter .select2-container"
+    ).click()
+    page.keyboard.type("north")
+    page.locator(".select2-results__option", has_text="Northwind").click()
+    page.click("#books-inline-controls [data-inline-controls-apply]")
+
+    expect(
+        page.locator("#books-inline-controls .inline-controls-count").first
+    ).to_have_text("2 results")
+    assert_not_reloaded(page)
+    # Still an autocomplete after the inline is refreshed.
+    expect(
+        page.locator(
+            "#books-inline-controls .inline-controls-filter .select2-container"
+        )
+    ).to_have_count(1)
+
+
 def test_row_actions(change_page: Page, author):
     page = change_page
     row = page.locator("#books-group tr.has_original").first

@@ -8,6 +8,16 @@ class Author(models.Model):
         return self.name
 
 
+class Publisher(models.Model):
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class Book(models.Model):
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
@@ -18,6 +28,9 @@ class Book(models.Model):
     title = models.CharField(max_length=200)
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.DRAFT
+    )
+    publisher = models.ForeignKey(
+        Publisher, on_delete=models.SET_NULL, null=True, blank=True
     )
     published = models.DateField(null=True, blank=True)
     pages = models.PositiveIntegerField(default=0)

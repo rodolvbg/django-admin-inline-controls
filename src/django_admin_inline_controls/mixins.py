@@ -242,6 +242,15 @@ class InlineControlsMixin:
     #: Custom filter form. Its fields are applied as lookups, unless
     #: ``inline_filter_fields`` restricts which ones.
     inline_filter_form: type[Form] | None = None
+    #: Search the filters by a relation (``"publisher"``, ``"tags__in"``) with
+    #: the admin's autocomplete, like ``autocomplete_fields``: ``True`` for
+    #: all of them, or a list of lookups. Needs a ``ModelAdmin`` with
+    #: ``search_fields`` for the related model.
+    inline_filter_autocomplete: bool | Sequence[str] = False
+    #: Offer only the values the parent's rows use in the filters by choices
+    #: or by a relation (not in autocomplete ones): ``True`` for all of them,
+    #: or a list of lookups.
+    inline_filter_only_used_values: bool | Sequence[str] = False
     #: Refresh the inline in place (fetch) instead of reloading the page.
     inline_controls_ajax: bool = True
     #: Show a button that saves only this inline. Requires
@@ -337,7 +346,67 @@ class InlineControlsMixin:
         label = str(getattr(db_field, "verbose_name", db_field.name)).capitalize()
         if lookup_name in LOOKUP_LABELS:
             label = f"{label} ({LOOKUP_LABELS[lookup_name]})"
-        return build_filter_formfield(db_field, lookup_name, label)
+        formfield = build_filter_formfield(db_field, lookup_name, label)
+        if self._filter_autocompletes(lookup, db_field, lookup_name):
+            from django.contrib.admin.widgets import (
+                AutocompleteSelect,
+                AutocompleteSelectMultiple,
+            )
+
+            multiple = isinstance(formfield, forms.ModelMultipleChoiceField)
+            widget_class = (
+                AutocompleteSelectMultiple if multiple else AutocompleteSelect
+            )
+            formfield.widget = widget_class(db_field, self.admin_site)
+        return formfield
+
+    @staticmethod
+    def _for_lookup(option: bool | Sequence[str], lookup: str) -> bool:
+        return option is True or (not isinstance(option, bool) and lookup in option)
+
+    def _filter_autocompletes(
+        self, lookup: str, db_field: Any, lookup_name: str | None
+    ) -> bool:
+        """Whether the filter by ``lookup`` uses the admin's autocomplete."""
+        if not self._for_lookup(self.inline_filter_autocomplete, lookup):
+            return False
+        if not isinstance(db_field, models.ForeignKey | models.ManyToManyField):
+            return False
+        if lookup_name not in (None, "exact", "in"):
+            return False
+        related_admin = self.admin_site._registry.get(db_field.related_model)
+        return bool(related_admin and related_admin.get_search_fields(None))
+
+    def _limit_filter_choices(self, form: Form, queryset: QuerySet) -> None:
+        """Offer only the values ``queryset`` (the parent's rows) uses."""
+        from django.contrib.admin.widgets import AutocompleteMixin
+
+        for name, field in form.fields.items():
+            if not self._for_lookup(self.inline_filter_only_used_values, name):
+                continue
+            if isinstance(field.widget, AutocompleteMixin):
+                continue  # it searches every object
+            try:
+                _, lookup_name = resolve_lookup(self.model, name)
+            except FieldDoesNotExist:
+                continue
+            path = (
+                name.removesuffix(f"{LOOKUP_SEP}{lookup_name}") if lookup_name else name
+            )
+            if lookup_name not in (None, "exact", "in"):
+                continue
+            used = queryset.order_by().values(path)
+            if isinstance(field, forms.ModelChoiceField):
+                if field.queryset is not None:
+                    field.queryset = field.queryset.filter(pk__in=used)
+            elif isinstance(field, forms.ChoiceField):
+                values = {str(value) for value in used.values_list(path, flat=True)}
+                choices: list[tuple[Any, Any]] = list(field.choices)  # type: ignore[arg-type]
+                field.choices = [
+                    (value, label)
+                    for value, label in choices
+                    if value == "" or str(value) in values
+                ]
 
     def get_inline_filter_form_class(
         self, request: HttpRequest, obj: Any
@@ -373,6 +442,8 @@ class InlineControlsMixin:
         form = form_class(
             data, prefix=prefix, **self.get_inline_filter_form_kwargs(request, obj)
         )
+        if self.inline_filter_only_used_values:
+            self._limit_filter_choices(form, queryset)
         form.is_valid()
         filters = {
             name: value
@@ -608,10 +679,18 @@ class InlineControlsMixin:
             js.append("django_admin_inline_controls/js/save.js")
         if self.inline_bulk_actions or self.has_inline_actions:
             js.append("django_admin_inline_controls/js/actions.js")
-        return super().media + forms.Media(  # type: ignore[misc]
+        media = super().media + forms.Media(  # type: ignore[misc]
             js=js,
             css={"all": ["django_admin_inline_controls/css/core.css"]},
         )
+        if self.inline_filter_autocomplete:
+            # The autocomplete filters' select2 and admin scripts.
+            for lookup in self.inline_filter_fields:
+                try:
+                    media += self.get_inline_filter_formfield(lookup).widget.media
+                except FieldDoesNotExist:
+                    continue  # reported by the checks
+        return media
 
     def check(self, **kwargs: Any) -> list[Any]:
         from django_admin_inline_controls.checks import check_inline_controls

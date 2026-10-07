@@ -163,6 +163,37 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
                     "admin_inline_controls.E012",
                 )
 
+    for option, error_id in (
+        ("inline_filter_autocomplete", "admin_inline_controls.E020"),
+        ("inline_filter_only_used_values", "admin_inline_controls.E022"),
+    ):
+        value = getattr(inline, option)
+        if not isinstance(value, bool) and not (
+            isinstance(value, list | tuple)
+            and all(isinstance(lookup, str) for lookup in value)
+        ):
+            error(
+                f"The value of '{name}.{option}' must be True, False or a list "
+                "of lookups.",
+                error_id,
+            )
+    autocomplete = inline.inline_filter_autocomplete
+    if isinstance(autocomplete, list | tuple):
+        for lookup in autocomplete:
+            try:
+                db_field, lookup_name = resolve_lookup(inline.model, lookup)
+            except FieldDoesNotExist:
+                db_field, lookup_name = None, None
+            if db_field is None or not inline._filter_autocompletes(
+                lookup, db_field, lookup_name
+            ):
+                error(
+                    f"'{name}.inline_filter_autocomplete' contains {lookup!r}, "
+                    "which isn't a relation whose model has a ModelAdmin with "
+                    "'search_fields' on this site.",
+                    "admin_inline_controls.E021",
+                )
+
     parent_admin = inline.admin_site._registry.get(inline.parent_model)
     missing_admin_mixin = parent_admin is not None and not isinstance(
         parent_admin, InlineControlsAdminMixin

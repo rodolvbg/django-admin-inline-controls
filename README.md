@@ -86,6 +86,8 @@ shareable and several inlines never clash.
 | `inline_default_ordering` | `()` | Applied after the user's ordering. Defaults to the queryset's / model's ordering; `pk` is always appended so pages are stable. |
 | `inline_filter_fields` | `()` | Filter lookups. A form is generated from them. |
 | `inline_filter_form` | `None` | Your own filter `forms.Form`. |
+| `inline_filter_autocomplete` | `False` | Filters by a relation search as you type. `True` or a list of lookups. See [Searchable filters](#searchable-filters-and-only-the-values-in-use). |
+| `inline_filter_only_used_values` | `False` | Filters offer only the values the parent's rows have. `True` or a list of lookups. |
 | `inline_controls_ajax` | `True` | Refresh the inline in place instead of reloading the page. |
 | `inline_save_button` | `False` | Show a button that saves only this inline. See [Saving only the inline](#saving-only-the-inline). |
 | `inline_bulk_actions` | `()` | Actions for the selected rows. See [Bulk actions](#bulk-actions). |
@@ -126,6 +128,29 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
             queryset = queryset.filter(Q(title__icontains=search) | Q(isbn=search))
         return super().filter_inline_queryset(request, queryset, filters)
 ```
+
+#### Searchable filters, and only the values in use
+
+```python
+class BookInline(InlineControlsMixin, admin.TabularInline):
+    model = Book
+    inline_filter_fields = ["status", "publisher", "tags__in"]
+    inline_filter_autocomplete = ["publisher", "tags__in"]  # or True
+    inline_filter_only_used_values = True  # or a list of lookups
+```
+
+- **`inline_filter_autocomplete`**: the filters by a relation
+  (`"publisher"`, `"tags__in"`) search as you type, with the admin's own
+  autocomplete — like `autocomplete_fields`, so the related model needs a
+  `ModelAdmin` with `search_fields` on the site
+  (`admin_inline_controls.E021`). It keeps working after the inline is
+  refreshed, and with django-unfold.
+- **`inline_filter_only_used_values`**: the filters by choices or by a
+  relation offer only the values the parent's rows have — the statuses or
+  publishers of this author's books, not every one — like
+  django-admin-select-filter's `filter_only_used_values`. An autocomplete
+  filter still searches every object. Not applied to django-filter
+  `FilterSet`s, which have their own querysets.
 
 Every option also has a `get_*` hook taking `(request, obj)` —
 `get_inline_per_page`, `get_inline_ordering_fields`,
@@ -705,6 +730,9 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E010` | `inline_bulk_actions` is set but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
 | `admin_inline_controls.E018` | An `inline_actions` entry is not a method of the inline, a callable or a built-in row action. |
 | `admin_inline_controls.E019` | `inline_actions` is set but the parent `ModelAdmin` lacks `InlineControlsAdminMixin`. |
+| `admin_inline_controls.E020` | `inline_filter_autocomplete` is not `True`, `False` or a list of lookups. |
+| `admin_inline_controls.E021` | An `inline_filter_autocomplete` lookup isn't a relation whose model has a `ModelAdmin` with `search_fields` on the site. |
+| `admin_inline_controls.E022` | `inline_filter_only_used_values` is not `True`, `False` or a list of lookups. |
 | `admin_inline_controls.E011` | `inline_controls_selectors` is not a dict. |
 | `admin_inline_controls.E012` | An `inline_controls_selectors` key is unknown, or its value is not a selector or a non-empty list of selectors. |
 | `admin_inline_controls.E013` | `inline_footer_rows` is not a list of `(label, {column: value})` pairs. |

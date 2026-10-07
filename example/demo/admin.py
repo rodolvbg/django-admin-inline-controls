@@ -11,7 +11,7 @@ from django_admin_inline_controls.mixins import (
     InlineControlsMixin,
 )
 
-from .models import Article, Author, Book
+from .models import Article, Author, Book, Publisher
 
 
 class BookInline(DefaultActionsMixin, InlineControlsMixin, admin.TabularInline):
@@ -27,9 +27,14 @@ class BookInline(DefaultActionsMixin, InlineControlsMixin, admin.TabularInline):
     inline_filter_fields = [
         "title__icontains",
         "status",
+        "publisher",
         "featured",
         "published__gte",
     ]
+    # The publisher filter searches as you type; the status one only offers
+    # the statuses this author's books have.
+    inline_filter_autocomplete = ["publisher"]
+    inline_filter_only_used_values = True
     inline_save_button = True
     inline_bulk_actions = ["mark_published", "export_csv", "delete_selected"]
     # Row actions, as in django-inline-actions: View and Delete come from
@@ -102,3 +107,8 @@ class AuthorAdmin(InlineControlsAdminMixin, admin.ModelAdmin):
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
     list_display = ["title", "author", "status", "published"]
+
+
+@admin.register(Publisher)
+class PublisherAdmin(admin.ModelAdmin):
+    search_fields = ["name"]

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `inline_filter_autocomplete`: filters by a relation search as you type,
+  with the admin's autocomplete.
+- `inline_filter_only_used_values`: filters offer only the values the
+  parent's rows have.
+
 ## [0.1.1] - 2026-10-07
 
 ### Fixed

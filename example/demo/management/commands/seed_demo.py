@@ -4,7 +4,7 @@ import random
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
-from demo.models import Article, Author, Book
+from demo.models import Article, Author, Book, Publisher
 
 WORDS = "red blue green night river stone glass winter garden silent iron paper".split()
 
@@ -31,6 +31,22 @@ class Command(BaseCommand):
             )
             for index in range(1, 96)
         )
+        # Publishers from their own random sequence, so the rest of the demo
+        # data stays as it was. This author's books use three of the five.
+        publishers = [
+            Publisher.objects.get_or_create(name=name)[0]
+            for name in (
+                "Ink & Oak",
+                "Northwind",
+                "Paper Lantern",
+                "Quarto",
+                "Riverbend",
+            )
+        ]
+        pick = random.Random(7)
+        for book in author.books.all():
+            book.publisher = pick.choice(publishers[:3])
+            book.save(update_fields=["publisher"])
         Article.objects.bulk_create(
             Article(
                 author=author,

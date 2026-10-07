@@ -173,6 +173,7 @@ def test_filter_widgets_are_detached_from_the_change_form(admin_client, author):
     assert config(response)["filterParams"] == [
         "books-f-title__icontains",
         "books-f-status",
+        "books-f-publisher",
         "books-f-featured",
         "books-f-published__gte",
     ]

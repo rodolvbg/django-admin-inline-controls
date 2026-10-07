@@ -292,3 +292,10 @@ th.inline-controls-sortable .inline-controls-sort-toggle {
     text-decoration: none;
     cursor: pointer;
 }
+
+/* An autocomplete filter (inline_filter_autocomplete): as wide as a field. */
+.inline-controls .inline-controls-filter .select2-container {
+    display: block;
+    /* biome-ignore lint/complexity/noImportantStyles: over select2's inline width. */
+    width: 14rem !important;
+}
