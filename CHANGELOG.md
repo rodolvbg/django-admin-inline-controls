@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now, for inlines and the changelist alike. Its `FooterRowsMixin` follows
   these controls' filters and paging, and comes back with the refreshed
   inline: see the README's "Footer rows".
+- Row actions (`inline_actions`, `get_inline_actions()`,
+  `inline_actions_template`, the `ViewAction`, `DeleteAction` and
+  `DefaultActionsMixin` mixins, `row_actions.html` and checks `E018`,
+  `E019` and `E105`): they're in
+  [django-admin-tables](https://github.com/rodolvbg/django-admin-tables)
+  now, for inlines and the changelist alike. Its `RowActionsMixin`
+  refreshes only these controls' inline, keeping its filters and page: see
+  the README's "Row actions".
 
 ## [0.1.1] - 2026-10-07
 

@@ -410,10 +410,7 @@ class InlineControls:
 
     @property
     def has_footer(self) -> bool:
-        return (
-            self.paginator is not None
-            or self.save_url is not None
-        )
+        return self.paginator is not None or self.save_url is not None
 
     # URLs and config -------------------------------------------------------
 
