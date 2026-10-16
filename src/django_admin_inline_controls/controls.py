@@ -17,19 +17,23 @@ from typing import TYPE_CHECKING, Any
 from django.contrib.admin.utils import label_for_field, quote
 from django.core.exceptions import ValidationError
 from django.core.paginator import Page, Paginator
-from django.db.models import QuerySet
 from django.db.models.expressions import OrderBy
-from django.forms import Form
-from django.http import HttpRequest, QueryDict
 from django.urls import NoReverseMatch, reverse
 from django.utils.functional import cached_property
 from django.utils.text import capfirst
 from django.utils.translation import gettext
 
-from django_admin_inline_controls.types import Ordering, OrderingFields, OrderingValue
-
 if TYPE_CHECKING:
+    from django.db.models import QuerySet
+    from django.forms import Form
+    from django.http import HttpRequest, QueryDict
+
     from django_admin_inline_controls.mixins import InlineControlsMixin
+    from django_admin_inline_controls.types import (
+        Ordering,
+        OrderingFields,
+        OrderingValue,
+    )
 
 PAGES = "pages"
 INFINITE = "infinite"

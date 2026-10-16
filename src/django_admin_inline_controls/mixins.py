@@ -3,19 +3,16 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django import forms
 from django.contrib import messages
 from django.contrib.admin.utils import lookup_spawns_duplicates, model_format_dict
 from django.core.exceptions import FieldDoesNotExist, PermissionDenied, ValidationError
 from django.db import models, router, transaction
-from django.db.models import QuerySet
 from django.db.models.constants import LOOKUP_SEP
-from django.forms import BaseInlineFormSet, Form
 from django.http import (
     Http404,
     HttpRequest,
@@ -41,13 +38,20 @@ from django_admin_inline_controls.controls import (
     InlineControls,
     bound_primary_keys,
 )
-from django_admin_inline_controls.types import (
-    FilterResult,
-    FooterRows,
-    InlineActions,
-    OrderingFields,
-    Selectors,
-)
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    from django.db.models import QuerySet
+    from django.forms import BaseInlineFormSet, Form
+
+    from django_admin_inline_controls.types import (
+        FilterResult,
+        FooterRows,
+        InlineActions,
+        OrderingFields,
+        Selectors,
+    )
 
 LOOKUP_LABELS = {
     "contains": _("contains"),

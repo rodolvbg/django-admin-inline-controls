@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 try:
     import unfold  # noqa: F401
@@ -14,9 +14,11 @@ except ImportError as e:
 
 from django import forms
 from django.core import checks
-from django.http import HttpRequest
 
 from django_admin_inline_controls.mixins import InlineControlsMixin
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest
 
 #: Where the controls go in Unfold's inline templates; applied under the
 #: inline's own ``inline_controls_selectors``.

@@ -2,21 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 try:
-    import django_filters
+    import django_filters  # noqa: F401, TC002
 except ImportError as e:
     raise ImportError(
         "django_admin_inline_controls.contrib.filters requires django-filter. "
         "Install it with: pip install django-admin-inline-controls[filters]"
     ) from e
 
-from django.db.models import QuerySet
-from django.http import HttpRequest, QueryDict
-
 from django_admin_inline_controls.mixins import InlineControlsMixin
-from django_admin_inline_controls.types import FilterResult
+
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
+    from django.http import HttpRequest, QueryDict
+
+    from django_admin_inline_controls.types import FilterResult
 
 
 class FilterSetInlineControlsMixin(InlineControlsMixin):

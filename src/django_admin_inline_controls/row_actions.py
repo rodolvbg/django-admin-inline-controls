@@ -19,9 +19,8 @@ or from ``get_<action>_label(obj)`` / ``get_<action>_css(obj)`` /
 from __future__ import annotations
 
 import inspect
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
 from django.contrib.admin.utils import model_format_dict, quote
@@ -34,6 +33,9 @@ from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
 
 from django_admin_inline_controls.actions import delete_selected, inline_action
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def set_render_context(inline: Any, request: HttpRequest, parent: Any) -> None:
