@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `inline_filter_only_used_values`: filters offer only the values the
   parent's rows have.
 
+### Removed
+
+- Footer rows (`inline_footer_rows`, `inline_footer_scope`,
+  `inline_footer_tfoot`, `inline_footer_tfoot_template`,
+  `get_inline_footer_rows()`, `format_inline_footer_value()`, the
+  `tfoot.html` template and checks `E013` to `E017`): they're in
+  [django-admin-tables](https://github.com/rodolvbg/django-admin-tables)
+  now, for inlines and the changelist alike. Its `FooterRowsMixin` follows
+  these controls' filters and paging, and comes back with the refreshed
+  inline: see the README's "Footer rows".
+
 ## [0.1.1] - 2026-10-07
 
 ### Fixed

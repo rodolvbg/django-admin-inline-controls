@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from django import forms
@@ -21,7 +20,6 @@ from django.http import (
     HttpResponseBase,
     QueryDict,
 )
-from django.template.defaultfilters import floatformat
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path
 from django.utils.safestring import SafeString, mark_safe
@@ -32,7 +30,6 @@ from django.views.decorators.http import require_POST
 
 from django_admin_inline_controls.controls import (
     DEFAULT_SELECTORS,
-    FOOTER_FILTERED,
     INFINITE,
     PAGES,
     InlineControls,
@@ -47,7 +44,6 @@ if TYPE_CHECKING:
 
     from django_admin_inline_controls.types import (
         FilterResult,
-        FooterRows,
         InlineActions,
         OrderingFields,
         Selectors,
@@ -273,18 +269,6 @@ class InlineControlsMixin:
     #: ``ModelAdmin``.
     inline_actions: Sequence[str | Callable[..., Any]] | None = ()
     inline_actions_template = "django_admin_inline_controls/row_actions.html"
-    #: Rows of totals/averages/… below the table: ``(label, {column: value})``
-    #: pairs, a value being an aggregate (``Sum("pages")``), a
-    #: ``callable(queryset)`` or a constant.
-    inline_footer_rows: FooterRows = ()
-    #: What the footer rows add up: ``"filtered"`` (every row matching the
-    #: filters, on every page) or ``"page"`` (the rows shown).
-    inline_footer_scope: str = FOOTER_FILTERED
-    #: Render the footer rows in the table's <tfoot>, under their columns
-    #: (tabular inlines). ``False``, or an inline without a table, shows them
-    #: as a summary line in the footer instead.
-    inline_footer_tfoot: bool = True
-    inline_footer_tfoot_template = "django_admin_inline_controls/tfoot.html"
     #: CSS selectors the JS uses to find its way in the inline's markup,
     #: merged over ``DEFAULT_SELECTORS``: set the keys that differ in your
     #: theme or inline template.
@@ -328,21 +312,6 @@ class InlineControlsMixin:
         for key, value in self.inline_controls_selectors.items():
             selectors[key] = [value] if isinstance(value, str) else list(value)
         return selectors
-
-    def get_inline_footer_rows(self, request: HttpRequest, obj: Any) -> FooterRows:
-        return self.inline_footer_rows
-
-    def format_inline_footer_value(self, column: str, value: Any) -> Any:
-        """Text (or safe HTML) of a footer cell. Override for currencies,
-        units, localized numbers…; the default is the plain value, floats and
-        decimals rounded to 2 decimals at most (``1234.5``)."""
-        if value is None:
-            return ""
-        if isinstance(value, SafeString):
-            return value
-        if isinstance(value, float | Decimal):
-            return floatformat(value, "-2u")
-        return str(value)
 
     def get_inline_filter_formfield(self, lookup: str) -> forms.Field:
         """Form field used to filter by ``lookup``. Override to customize one."""

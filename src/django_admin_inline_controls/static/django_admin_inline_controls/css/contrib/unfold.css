@@ -1,7 +1,5 @@
 /* django-admin-inline-controls: django-unfold's colors, light and dark. */
-/* The tfoot also on its own: the add view has no controls around it. */
-.inline-controls,
-.inline-controls-tfoot {
+.inline-controls {
     --body-bg: #fff;
     --body-fg: var(--color-font-default-light);
     --body-quiet-color: var(--color-font-subtle-light);
@@ -12,8 +10,7 @@
     --selected-bg: var(--color-base-100);
 }
 
-.dark .inline-controls,
-.dark .inline-controls-tfoot {
+.dark .inline-controls {
     --body-bg: var(--color-base-900);
     --body-fg: var(--color-font-default-dark);
     --body-quiet-color: var(--color-font-subtle-dark);
@@ -69,39 +66,6 @@
 
 .inline-controls-current {
     color: var(--body-fg);
-}
-
-table tfoot.inline-controls-tfoot.inline-controls-tfoot th,
-table tfoot.inline-controls-tfoot.inline-controls-tfoot td {
-    padding: 0.5rem 0.375rem;
-    border-top: 1px solid var(--hairline-color);
-    background: var(--darkened-bg);
-    color: var(--body-fg);
-    font-size: 0.8125rem;
-    text-align: left;
-}
-
-table
-    tfoot.inline-controls-tfoot.inline-controls-tfoot
-    :is(th, td):first-child {
-    padding-left: 0.75rem;
-}
-
-table tfoot.inline-controls-tfoot.inline-controls-tfoot th {
-    text-align: right;
-}
-
-table
-    tfoot.inline-controls-tfoot.inline-controls-tfoot
-    .inline-controls-footer-label {
-    margin-right: 0.5rem;
-    color: var(--body-quiet-color);
-}
-
-table
-    tfoot.inline-controls-tfoot.inline-controls-tfoot
-    .inline-controls-footer-value {
-    font-weight: 600;
 }
 
 .inline-controls .inline-controls-row-action.button {

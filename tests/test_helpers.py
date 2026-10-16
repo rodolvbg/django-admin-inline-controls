@@ -130,3 +130,17 @@ def test_generated_filter_labels():
         "Published (from)",
         "Status",
     ]
+
+
+def test_type_aliases_are_importable():
+    from django_admin_inline_controls import types
+
+    assert set(types.__all__) == {
+        "FilterResult",
+        "InlineActions",
+        "Ordering",
+        "OrderingFields",
+        "OrderingValue",
+        "Selectors",
+    }
+    assert all(hasattr(types, name) for name in types.__all__)

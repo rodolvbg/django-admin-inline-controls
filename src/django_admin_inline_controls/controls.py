@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from django.contrib.admin.utils import label_for_field, quote
@@ -37,8 +36,6 @@ if TYPE_CHECKING:
 
 PAGES = "pages"
 INFINITE = "infinite"
-FOOTER_FILTERED = "filtered"
-FOOTER_PAGE = "page"
 
 #: Where the JS finds things in the admin's inline markup. Override per inline
 #: with ``inline_controls_selectors`` for themes or inline templates with a
@@ -94,62 +91,10 @@ class OrderingColumn:
 
 
 @dataclass(frozen=True)
-class FooterCell:
-    column: str
-    column_label: str
-    #: Formatted for display by ``format_inline_footer_value()``.
-    value: str
-    #: Machine-readable value (``"1234.5"``) for the page's JS, or ``""`` when
-    #: it isn't a number.
-    raw: str = ""
-
-
-@dataclass(frozen=True)
-class FooterRow:
-    """A row of totals/averages/… below the inline's table."""
-
-    label: str
-    cells: list[FooterCell]
-
-
-@dataclass(frozen=True)
-class TfootCell:
-    """One cell of a footer row in the <tfoot>, under its column."""
-
-    #: The value shown here, or ``None`` for an empty cell.
-    cell: FooterCell | None = None
-    #: ``"<row index>:<column>"``, as ``data-footer-key``.
-    key: str = ""
-    #: The row's label goes in this cell, before the value (when the first
-    #: value is in the first column, there is no empty column for it).
-    label_here: bool = False
-
-
-@dataclass(frozen=True)
-class TfootRow:
-    index: int
-    label: str
-    #: Columns the label spans at the start of the row; ``0`` when it goes
-    #: into the first value's cell instead.
-    label_colspan: int
-    cells: list[TfootCell]
-    #: Empty columns after the last value, up to the table's width.
-    trailing: int = 0
-
-
-@dataclass(frozen=True)
 class PageLink:
     number: int | str
     url: str | None
     current: bool = False
-
-
-def raw_number(value: Any) -> str:
-    """A footer value as plain digits for JS (``"1234.5"``), ``""`` if not a
-    number."""
-    if isinstance(value, bool) or not isinstance(value, int | float | Decimal):
-        return ""
-    return format(value, "f") if isinstance(value, Decimal) else repr(value)
 
 
 def normalize_ordering_fields(
@@ -211,8 +156,6 @@ class InlineControls:
         self.loaded_count: int | None = None
         self.pages_loaded = pages_loaded
         self.selectors = inline.get_inline_controls_selectors(request, parent)
-        #: Set when the footer rows were rendered inside the inline's table.
-        self.tfoot_rendered = False
 
     # Query parameter names -------------------------------------------------
 
@@ -479,66 +422,8 @@ class InlineControls:
         return (
             self.paginator is not None
             or self.save_url is not None
-            or bool(self.summary_rows)
             or self.has_row_actions
         )
-
-    @property
-    def summary_rows(self) -> list[FooterRow]:
-        """The footer rows shown as a summary in the footer: all of them,
-        unless they were rendered in the table's <tfoot>."""
-        return [] if self.tfoot_rendered else self.footer_rows
-
-    def tfoot_rows(
-        self, positions: dict[str, int], width: int = 0
-    ) -> list[TfootRow] | None:
-        """The footer rows laid out in a table ``width`` columns wide whose
-        field columns are at ``positions`` (0-based), or ``None`` if a
-        value's column isn't among them."""
-        return layout_tfoot_rows(self.footer_rows, positions, width)
-
-    # Footer rows -----------------------------------------------------------
-
-    @cached_property
-    def footer_rows(self) -> list[FooterRow]:
-        """``inline_footer_rows`` computed on the filtered (or shown) rows,
-        with every aggregate of every row in a single query."""
-        definitions = self.inline.get_inline_footer_rows(self.request, self.parent)
-        if not definitions or not hasattr(self, "filtered_queryset"):
-            return []
-        queryset = (
-            self.shown_queryset
-            if self.inline.inline_footer_scope == FOOTER_PAGE
-            else self.filtered_queryset
-        )
-        aggregates = {
-            f"footer_{row}_{column}": value
-            for row, (_, cells) in enumerate(definitions)
-            for column, value in cells.items()
-            if getattr(value, "contains_aggregate", False)
-        }
-        results = queryset.order_by().aggregate(**aggregates) if aggregates else {}
-        rows = []
-        for row, (label, cells) in enumerate(definitions):
-            values = []
-            for column, value in cells.items():
-                key = f"footer_{row}_{column}"
-                if key in results:
-                    value = results[key]
-                elif callable(value):
-                    value = value(queryset)
-                values.append(
-                    FooterCell(
-                        column=column,
-                        column_label=self._column_label(column),
-                        value=str(
-                            self.inline.format_inline_footer_value(column, value)
-                        ),
-                        raw=raw_number(value),
-                    )
-                )
-            rows.append(FooterRow(label=str(label), cells=values))
-        return rows
 
     # URLs and config -------------------------------------------------------
 
@@ -632,57 +517,3 @@ def column_label(inline: Any, name: str) -> str:
         return str(capfirst(label))
     except AttributeError:
         return name
-
-
-def empty_footer_rows(inline: Any, request: HttpRequest | None) -> list[FooterRow]:
-    """``inline_footer_rows`` without values, for the add view: there are no
-    saved rows to aggregate yet, but the <tfoot> keeps its structure and
-    ``data-*`` attributes (``data-value=""``) for the page's JS."""
-    definitions = inline.get_inline_footer_rows(request, None)
-    return [
-        FooterRow(
-            label=str(label),
-            cells=[
-                FooterCell(
-                    column=column, column_label=column_label(inline, column), value=""
-                )
-                for column in cells
-            ],
-        )
-        for label, cells in definitions or ()
-    ]
-
-
-def layout_tfoot_rows(
-    footer_rows: list[FooterRow], positions: dict[str, int], width: int = 0
-) -> list[TfootRow] | None:
-    """``footer_rows`` laid out in a table ``width`` columns wide whose field
-    columns are at ``positions`` (0-based), or ``None`` if a value's column
-    isn't among them."""
-    # Columns before the first field's (Django's narrow "original" one).
-    leading = min(positions.values(), default=0)
-    rows = []
-    for index, row in enumerate(footer_rows):
-        if any(cell.column not in positions for cell in row.cells):
-            return None
-        by_position = {positions[cell.column]: cell for cell in row.cells}
-        if not by_position:
-            continue
-        first, last = min(by_position), max(by_position)
-        # The leading columns alone (Django's narrow "original" one) don't
-        # fit the label: it spans the empty field columns before the first
-        # value too, or goes into that value's cell.
-        label_colspan = first if first > leading else 0
-        cells = [] if label_colspan else [TfootCell()] * first
-        for position in range(first, last + 1):
-            cell = by_position.get(position)
-            cells.append(
-                TfootCell(
-                    cell=cell,
-                    key=f"{index}:{cell.column}" if cell else "",
-                    label_here=not label_colspan and position == first,
-                )
-            )
-        trailing = max(width - last - 1, 0)
-        rows.append(TfootRow(index, row.label, label_colspan, cells, trailing))
-    return rows

@@ -77,9 +77,6 @@ def test_every_documented_block_exists():
             "footer",
             "footer_classes",
             "footer_start",
-            "footer_rows",
-            "footer_row",
-            "footer_cell",
             "pagination",
             "infinite",
             "infinite_count",
@@ -97,13 +94,6 @@ def test_every_documented_block_exists():
         ],
         "django_admin_inline_controls/inline_response.html": ["response", "inlines"],
         "django_admin_inline_controls/row_actions.html": ["row_actions", "row_action"],
-        "django_admin_inline_controls/tfoot.html": [
-            "tfoot",
-            "tfoot_row",
-            "tfoot_label",
-            "tfoot_cell",
-            "tfoot_value",
-        ],
     }
     for name, expected in blocks.items():
         source = get_template(name).template.source
