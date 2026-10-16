@@ -68,12 +68,6 @@
     color: var(--body-fg);
 }
 
-.inline-controls .inline-controls-row-action.button {
-    padding: 0.25rem 0.625rem;
-    font-size: 0.75rem;
-    text-decoration: none;
-}
-
 /* An autocomplete filter: the height of the toolbar's other controls (over
    Unfold's `min-height: 38px !important` and admin/css/autocomplete.css,
    loaded after this file). */

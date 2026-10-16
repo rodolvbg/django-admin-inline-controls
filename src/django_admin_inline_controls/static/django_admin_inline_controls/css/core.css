@@ -234,21 +234,6 @@ th.inline-controls-sortable .inline-controls-sort-toggle {
     transition: opacity 0.2s;
 }
 
-.inline-controls-row-actions:not([hidden]) {
-    display: inline-flex;
-    gap: 4px;
-}
-
-.inline-controls-row-action.button {
-    margin: 0;
-    padding: 4px 8px;
-    font-size: 0.75rem;
-    line-height: 1.2;
-    white-space: nowrap;
-    text-decoration: none;
-    cursor: pointer;
-}
-
 /* An autocomplete filter (inline_filter_autocomplete): as wide as a field. */
 .inline-controls .inline-controls-filter .select2-container {
     display: block;

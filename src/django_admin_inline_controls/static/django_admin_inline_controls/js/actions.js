@@ -1,12 +1,10 @@
 /*
- * django-admin-inline-controls: bulk actions (inline_bulk_actions) and row
- * actions (inline_actions). Loaded after core.js, only by inlines that
- * use them.
+ * django-admin-inline-controls: bulk actions (inline_bulk_actions). Loaded
+ * after core.js, only by inlines that use them.
  */
 (() => {
     const core = globalThis.DjangoAdminInlineControls;
     const SCOPE = ".inline-controls-actions";
-    const ROW_SCOPE = ".inline-controls-row-actions-status";
 
     /** Whether the inline has bulk actions (the toolbar's select). */
     const hasBulkActions = (config) =>
@@ -87,22 +85,9 @@
         }
     }
 
-    /** Show the row action buttons, rendered hidden by the server. */
-    function showRowActions(scope, config) {
-        if (!config.actionUrl || !config.rowActions) {
-            return;
-        }
-        for (const el of scope.querySelectorAll(
-            "[data-inline-controls-row-actions]",
-        )) {
-            el.hidden = false;
-        }
-    }
-
     function setupActions(root, state) {
         const { config } = state;
         state.selectAcross = false;
-        showRowActions(root, config);
         if (!hasBulkActions(config)) {
             return;
         }
@@ -158,28 +143,6 @@
         }
         data.append("select_across", state.selectAcross ? "1" : "0");
         await postAction(root, data, SCOPE);
-    }
-
-    /** One row's action: the button's row only, no selection needed. */
-    async function runRowAction(root, button) {
-        const state = core.stateOf(root);
-        const { config } = state;
-        const group = document.getElementById(`${config.prefix}-group`);
-        const form = group?.closest("form");
-        if (state.loading || !config.actionUrl || !form) {
-            return;
-        }
-        const { confirmation } = button.dataset;
-        if (confirmation && !window.confirm(confirmation)) {
-            return;
-        }
-        if (state.dirty && !window.confirm(config.messages.unsaved)) {
-            return;
-        }
-        const data = actionData(root, form, config);
-        data.append("row_action", button.dataset.inlineControlsRowAction);
-        data.append("_selected_action", button.dataset.pk);
-        await postAction(root, data, ROW_SCOPE);
     }
 
     /** The CSRF token and the number of rows loaded (infinite mode). */
@@ -283,7 +246,6 @@
     core.register({
         setup: setupActions,
         rowsLoaded(root, state) {
-            showRowActions(root, state.config);
             if (hasBulkActions(state.config)) {
                 for (const { row, pk } of selectableRows(root, state.config)) {
                     addRowCheckbox(row, pk, state.config);
@@ -292,13 +254,6 @@
             }
         },
         click(event, root, state) {
-            const rowButton = event.target.closest(
-                "[data-inline-controls-row-action]",
-            );
-            if (rowButton) {
-                runRowAction(root, rowButton);
-                return true;
-            }
             if (event.target.closest("[data-inline-controls-run]")) {
                 runAction(root);
                 return true;
@@ -326,5 +281,5 @@
         },
     });
 
-    Object.assign(core, { runAction, runRowAction });
+    Object.assign(core, { runAction });
 })();

@@ -150,7 +150,6 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
             inline.inline_bulk_actions,
             "admin_inline_controls.E010",
         ),
-        ("inline_actions", inline.has_inline_actions, "admin_inline_controls.E019"),
     ):
         if enabled and missing_admin_mixin:
             error(
@@ -170,19 +169,6 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
                 f"'{name}.inline_bulk_actions' contains {action!r}, which is not a "
                 f"method of '{name}', a callable, or a built-in action.",
                 "admin_inline_controls.E009",
-            )
-
-    for action in inline.inline_actions or ():
-        try:
-            _, func = inline._resolve_inline_action(action)
-        except AttributeError:
-            func = None
-        if not callable(func):
-            error(
-                f"'{name}.inline_actions' contains {action!r}, which is not "
-                f"a method of '{name}', a callable, or a built-in row action "
-                "('view', 'delete').",
-                "admin_inline_controls.E018",
             )
 
     return errors

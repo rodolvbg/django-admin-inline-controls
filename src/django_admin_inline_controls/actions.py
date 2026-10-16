@@ -115,62 +115,8 @@ def delete_selected(inline: Any, request: HttpRequest, queryset: QuerySet) -> No
 BUILTIN_BULK_ACTIONS: dict[str, InlineAction] = {"delete_selected": delete_selected}
 
 
-# Row actions as django-inline-actions' mixins ---------------------------------
-
-
-class ViewAction:
-    """A "View" link on each row, to its change view::
-
-    class BookInline(ViewAction, InlineControlsMixin, admin.TabularInline):
-        ...
-    """
-
-    inline_actions: list[str | InlineAction] | None = ["view_action"]
-
-    @inline_action(permissions=["view"], description=_("View"))
-    def view_action(
-        self, request: HttpRequest, obj: Any, parent_obj: Any = None
-    ) -> Any:
-        from django_admin_inline_controls.row_actions import view
-
-        return view(self, request, obj, parent_obj)
-
-    view_action.inline_actions_link = True
-
-
-class DeleteAction:
-    """A "Delete" button on each row (with the delete permission)::
-
-    class BookInline(DeleteAction, InlineControlsMixin, admin.TabularInline):
-        ...
-    """
-
-    def get_inline_actions(self, request: HttpRequest | None, obj: Any = None) -> Any:
-        actions = list(super().get_inline_actions(request, obj))  # type: ignore[misc]
-        if "delete_action" not in actions:
-            actions.append("delete_action")
-        return actions
-
-    @inline_action(
-        permissions=["delete"],
-        description=_("Delete"),
-        confirmation=_("Delete “%(object)s”? This cannot be undone."),
-    )
-    def delete_action(self, request: HttpRequest, queryset: QuerySet) -> None:
-        return delete_selected(self, request, queryset)
-
-
-class DefaultActionsMixin(ViewAction, DeleteAction):
-    """``ViewAction`` and ``DeleteAction``."""
-
-    inline_actions: list[str | InlineAction] | None = []
-
-
 __all__ = [
     "BUILTIN_BULK_ACTIONS",
-    "DefaultActionsMixin",
-    "DeleteAction",
-    "ViewAction",
     "delete_selected",
     "inline_action",
 ]

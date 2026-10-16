@@ -62,15 +62,6 @@ class NestedInlineControlsMixin(InlineControlsMixin):
                     id="admin_inline_controls.E103",
                 )
             )
-        if self.has_inline_actions:
-            errors.append(
-                checks.Error(
-                    f"'{type(self).__qualname__}.inline_actions' is not "
-                    "supported on a nested_admin inline.",
-                    obj=type(self),
-                    id="admin_inline_controls.E105",
-                )
-            )
         return errors
 
 
