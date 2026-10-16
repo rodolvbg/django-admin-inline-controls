@@ -22,7 +22,6 @@ from django.http import (
 )
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path
-from django.utils.safestring import SafeString, mark_safe
 from django.utils.text import capfirst
 from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _

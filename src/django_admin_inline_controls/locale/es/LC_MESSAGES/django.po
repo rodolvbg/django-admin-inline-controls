@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: django-admin-inline-controls 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-02 13:43+0200\n"
+"POT-Creation-Date: 2026-10-16 17:43-0500\n"
 "PO-Revision-Date: 2026-09-29 18:00+0200\n"
 "Last-Translator: Rodolfo Becerra\n"
 "Language-Team: Spanish\n"
@@ -150,10 +150,6 @@ msgid "No"
 msgstr "No"
 
 #: mixins.py
-msgid "Actions"
-msgstr "Acciones"
-
-#: mixins.py
 msgid "Please correct the errors below."
 msgstr "Por favor, corrija los errores detallados abajo."
 
@@ -164,23 +160,6 @@ msgstr "Guardado."
 #: mixins.py
 msgid "Done."
 msgstr "Hecho."
-
-#: row_actions.py
-msgid "Delete"
-msgstr "Eliminar"
-
-#: row_actions.py
-#, python-format
-msgid "Delete “%(object)s”? This cannot be undone."
-msgstr "¿Eliminar «%(object)s»? No se puede deshacer."
-
-#: row_actions.py
-msgid "View"
-msgstr "Ver"
-
-#: row_actions.py
-msgid "This item has no page."
-msgstr "Este elemento no tiene página."
 
 #: templates/django_admin_inline_controls/footer.html
 #, python-format

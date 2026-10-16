@@ -4,7 +4,7 @@ from django.contrib import admin, messages
 from django.db.models.functions import Lower
 from django.http import HttpResponse
 
-from django_admin_inline_controls.actions import DefaultActionsMixin, inline_action
+from django_admin_inline_controls.actions import inline_action
 from django_admin_inline_controls.mixins import (
     InlineControlsAdminMixin,
     InlineControlsMixin,
@@ -13,7 +13,7 @@ from django_admin_inline_controls.mixins import (
 from .models import Article, Author, Book, Publisher
 
 
-class BookInline(DefaultActionsMixin, InlineControlsMixin, admin.TabularInline):
+class BookInline(InlineControlsMixin, admin.TabularInline):
     model = Book
     extra = 0
     fields = ["title", "status", "published", "pages", "featured"]
@@ -36,9 +36,6 @@ class BookInline(DefaultActionsMixin, InlineControlsMixin, admin.TabularInline):
     inline_filter_only_used_values = True
     inline_save_button = True
     inline_bulk_actions = ["mark_published", "export_csv", "delete_selected"]
-    # Row actions, as in django-inline-actions: View and Delete come from
-    # DefaultActionsMixin.
-    inline_actions = ["toggle_featured"]
 
     @inline_action(
         permissions=["change"],
@@ -47,16 +44,6 @@ class BookInline(DefaultActionsMixin, InlineControlsMixin, admin.TabularInline):
     def mark_published(self, request, queryset):
         count = queryset.update(status=Book.Status.PUBLISHED)
         self.message_user(request, f"{count} books published.", messages.SUCCESS)
-
-    def toggle_featured(self, request, obj, parent_obj=None):
-        """A row action with django-inline-actions' signature."""
-        obj.featured = not obj.featured
-        obj.save(update_fields=["featured"])
-        state = "featured" if obj.featured else "no longer featured"
-        self.message_user(request, f"“{obj}” is {state}.", messages.SUCCESS)
-
-    def get_toggle_featured_label(self, obj):
-        return "Unfeature" if obj.featured else "Feature"
 
     @inline_action(description="Export selected %(verbose_name_plural)s to CSV")
     def export_csv(self, request, queryset):
