@@ -44,178 +44,183 @@ def filter_form(inline, author, query=""):
     return form
 
 
-# Autocomplete -----------------------------------------------------------------
+class TestFilterAutocomplete:
+    """The inline_filter_autocomplete option."""
+
+    def test_relation_filters_can_autocomplete(self, author, publishers):
+        inline = make_inline(
+            inline_filter_fields=[
+                "publisher",
+                "publisher__in",
+                "status",
+                "title__icontains",
+            ],
+            inline_filter_autocomplete=True,
+        )
+        form = filter_form(inline, author)
+
+        assert type(form.fields["publisher"].widget) is AutocompleteSelect
+        assert type(form.fields["publisher__in"].widget) is AutocompleteSelectMultiple
+        # Not relations: their usual widgets.
+        assert not isinstance(form.fields["status"].widget, AutocompleteSelect)
+        assert not isinstance(
+            form.fields["title__icontains"].widget, AutocompleteSelect
+        )
+
+    def test_autocomplete_only_listed_lookups_and_searchable_admins(
+        self, author, publishers
+    ):
+        listed = make_inline(
+            inline_filter_fields=["publisher", "publisher__in"],
+            inline_filter_autocomplete=["publisher"],
+        )
+        form = filter_form(listed, author)
+        assert type(form.fields["publisher"].widget) is AutocompleteSelect
+        assert not isinstance(
+            form.fields["publisher__in"].widget, AutocompleteSelectMultiple
+        )
+
+        # No ModelAdmin with search_fields for Publisher on this site.
+        site = admin.AdminSite(name="no_publisher_site")
+        plain = make_inline(
+            site, inline_filter_fields=["publisher"], inline_filter_autocomplete=True
+        )
+        assert not isinstance(
+            filter_form(plain, author).fields["publisher"].widget, AutocompleteSelect
+        )
+
+    def test_autocomplete_filter_renders_and_loads_its_scripts(
+        self, admin_client, author, publishers
+    ):
+        html = admin_client.get(change_url(author)).content.decode()
+
+        assert 'name="books-f-publisher"' in html
+        assert "admin-autocomplete" in html
+        assert 'data-field-name="publisher"' in html
+        assert "admin/js/autocomplete.js" in html
+        # Still a filter of the inline, not a field of the change form.
+        assert 'form="books-inline-controls-filters"' in html
+
+    def test_autocomplete_filter_filters(self, admin_client, author, publishers):
+        used, other, _ = publishers
+        response = admin_client.get(change_url(author, f"books-f-publisher={other.pk}"))
+
+        controls = formset(response, "books").inline_controls
+        assert controls.filtered_queryset.count() == 2
+
+    def test_autocomplete_edge_cases(self, author, publishers):
+        # Other lookups of a relation keep their own field (Yes/No for isnull).
+        inline = make_inline(
+            inline_filter_fields=["publisher__isnull"], inline_filter_autocomplete=True
+        )
+        form = filter_form(inline, author)
+        assert not isinstance(
+            form.fields["publisher__isnull"].widget, AutocompleteSelect
+        )
+
+        # The media skip a lookup the checks report.
+        broken = make_inline(
+            inline_filter_fields=["publisher", "nope"], inline_filter_autocomplete=True
+        )
+        assert "admin/js/autocomplete.js" in str(broken.media)
 
 
-def test_relation_filters_can_autocomplete(author, publishers):
-    inline = make_inline(
-        inline_filter_fields=[
-            "publisher",
-            "publisher__in",
-            "status",
-            "title__icontains",
+class TestFilterOnlyUsedValues:
+    """The inline_filter_only_used_values option."""
+
+    def test_only_used_values(self, author, publishers):
+        used, other, unused = publishers
+        Book.objects.filter(author=author).update(status=Book.Status.DRAFT)
+        Book.objects.filter(author=author, title="Book 01").update(
+            status=Book.Status.PUBLISHED
+        )
+        inline = make_inline(
+            inline_filter_fields=["status", "status__in", "publisher", "publisher__in"],
+            inline_filter_only_used_values=True,
+        )
+        form = filter_form(inline, author)
+
+        assert [value for value, _ in form.fields["status"].choices] == [
+            "",
+            "draft",
+            "published",
+        ]
+        assert [value for value, _ in form.fields["status__in"].choices] == [
+            "draft",
+            "published",
+        ]
+        assert set(form.fields["publisher"].queryset) == {used, other}
+        assert set(form.fields["publisher__in"].queryset) == {used, other}
+
+    def test_only_used_values_for_listed_lookups(self, author, publishers):
+        inline = make_inline(
+            inline_filter_fields=["status", "publisher"],
+            inline_filter_only_used_values=["publisher"],
+        )
+        form = filter_form(inline, author)
+
+        assert len(form.fields["status"].choices) == 4  # untouched
+        assert form.fields["publisher"].queryset.count() == 2
+
+    def test_only_used_values_rejects_an_unused_value(self, author, publishers):
+        _, _, unused = publishers
+        inline = make_inline(
+            inline_filter_fields=["publisher"], inline_filter_only_used_values=True
+        )
+        form, queryset = inline.get_inline_filtered_queryset(
+            None,
+            author,
+            Book.objects.filter(author=author),
+            QueryDict(f"f-publisher={unused.pk}"),
+            "f",
+        )
+
+        assert "publisher" in form.errors
+        assert queryset.count() == 25  # ignored, as any invalid filter
+
+    def test_only_used_values_skip_what_it_cannot_limit(self, author, publishers):
+        from django import forms
+
+        class CustomForm(forms.Form):
+            q = forms.CharField(required=False)
+            title__icontains = forms.CharField(required=False)
+            # Its queryset is set later, by the form itself: left alone.
+            publisher = forms.ModelChoiceField(queryset=None, required=False)
+
+        custom = make_inline(
+            inline_filter_form=CustomForm, inline_filter_only_used_values=True
+        )
+        form = filter_form(custom, author)
+        assert set(form.fields) == {"q", "title__icontains", "publisher"}
+        assert form.fields["publisher"].queryset is None
+
+        # Autocomplete filters search every object: not limited.
+        both = make_inline(
+            inline_filter_fields=["publisher"],
+            inline_filter_autocomplete=True,
+            inline_filter_only_used_values=True,
+        )
+        assert filter_form(both, author).fields["publisher"].queryset.count() == 3
+
+
+class TestFilterOptionChecks:
+    """System checks of the filter options."""
+
+    @pytest.mark.parametrize(
+        ("attrs", "error_id"),
+        [
+            ({"inline_filter_autocomplete": "x"}, "admin_inline_controls.E020"),
+            ({"inline_filter_only_used_values": [1]}, "admin_inline_controls.E022"),
         ],
-        inline_filter_autocomplete=True,
     )
-    form = filter_form(inline, author)
+    def test_invalid_option(self, attrs, error_id):
+        assert error_id in [e.id for e in make_inline(**attrs).check()]
 
-    assert type(form.fields["publisher"].widget) is AutocompleteSelect
-    assert type(form.fields["publisher__in"].widget) is AutocompleteSelectMultiple
-    # Not relations: their usual widgets.
-    assert not isinstance(form.fields["status"].widget, AutocompleteSelect)
-    assert not isinstance(form.fields["title__icontains"].widget, AutocompleteSelect)
+    def test_unknown_autocomplete_lookups_are_reported(self):
+        bad = make_inline(inline_filter_autocomplete=["status", "nope", "publisher"])
 
+        ids = [e.id for e in bad.check()]
+        assert ids.count("admin_inline_controls.E021") == 2
 
-def test_autocomplete_only_listed_lookups_and_searchable_admins(author, publishers):
-    listed = make_inline(
-        inline_filter_fields=["publisher", "publisher__in"],
-        inline_filter_autocomplete=["publisher"],
-    )
-    form = filter_form(listed, author)
-    assert type(form.fields["publisher"].widget) is AutocompleteSelect
-    assert not isinstance(
-        form.fields["publisher__in"].widget, AutocompleteSelectMultiple
-    )
-
-    # No ModelAdmin with search_fields for Publisher on this site.
-    site = admin.AdminSite(name="no_publisher_site")
-    plain = make_inline(
-        site, inline_filter_fields=["publisher"], inline_filter_autocomplete=True
-    )
-    assert not isinstance(
-        filter_form(plain, author).fields["publisher"].widget, AutocompleteSelect
-    )
-
-
-def test_autocomplete_filter_renders_and_loads_its_scripts(
-    admin_client, author, publishers
-):
-    html = admin_client.get(change_url(author)).content.decode()
-
-    assert 'name="books-f-publisher"' in html
-    assert "admin-autocomplete" in html
-    assert 'data-field-name="publisher"' in html
-    assert "admin/js/autocomplete.js" in html
-    # Still a filter of the inline, not a field of the change form.
-    assert 'form="books-inline-controls-filters"' in html
-
-
-def test_autocomplete_filter_filters(admin_client, author, publishers):
-    used, other, _ = publishers
-    response = admin_client.get(change_url(author, f"books-f-publisher={other.pk}"))
-
-    controls = formset(response, "books").inline_controls
-    assert controls.filtered_queryset.count() == 2
-
-
-# Only used values ----------------------------------------------------------------
-
-
-def test_only_used_values(author, publishers):
-    used, other, unused = publishers
-    Book.objects.filter(author=author).update(status=Book.Status.DRAFT)
-    Book.objects.filter(author=author, title="Book 01").update(
-        status=Book.Status.PUBLISHED
-    )
-    inline = make_inline(
-        inline_filter_fields=["status", "status__in", "publisher", "publisher__in"],
-        inline_filter_only_used_values=True,
-    )
-    form = filter_form(inline, author)
-
-    assert [value for value, _ in form.fields["status"].choices] == [
-        "",
-        "draft",
-        "published",
-    ]
-    assert [value for value, _ in form.fields["status__in"].choices] == [
-        "draft",
-        "published",
-    ]
-    assert set(form.fields["publisher"].queryset) == {used, other}
-    assert set(form.fields["publisher__in"].queryset) == {used, other}
-
-
-def test_only_used_values_for_listed_lookups(author, publishers):
-    inline = make_inline(
-        inline_filter_fields=["status", "publisher"],
-        inline_filter_only_used_values=["publisher"],
-    )
-    form = filter_form(inline, author)
-
-    assert len(form.fields["status"].choices) == 4  # untouched
-    assert form.fields["publisher"].queryset.count() == 2
-
-
-def test_only_used_values_rejects_an_unused_value(author, publishers):
-    _, _, unused = publishers
-    inline = make_inline(
-        inline_filter_fields=["publisher"], inline_filter_only_used_values=True
-    )
-    form, queryset = inline.get_inline_filtered_queryset(
-        None,
-        author,
-        Book.objects.filter(author=author),
-        QueryDict(f"f-publisher={unused.pk}"),
-        "f",
-    )
-
-    assert "publisher" in form.errors
-    assert queryset.count() == 25  # ignored, as any invalid filter
-
-
-def test_only_used_values_skip_what_it_cannot_limit(author, publishers):
-    from django import forms
-
-    class CustomForm(forms.Form):
-        q = forms.CharField(required=False)
-        title__icontains = forms.CharField(required=False)
-        # Its queryset is set later, by the form itself: left alone.
-        publisher = forms.ModelChoiceField(queryset=None, required=False)
-
-    custom = make_inline(
-        inline_filter_form=CustomForm, inline_filter_only_used_values=True
-    )
-    form = filter_form(custom, author)
-    assert set(form.fields) == {"q", "title__icontains", "publisher"}
-    assert form.fields["publisher"].queryset is None
-
-    # Autocomplete filters search every object: not limited.
-    both = make_inline(
-        inline_filter_fields=["publisher"],
-        inline_filter_autocomplete=True,
-        inline_filter_only_used_values=True,
-    )
-    assert filter_form(both, author).fields["publisher"].queryset.count() == 3
-
-
-# Checks -----------------------------------------------------------------------
-
-
-def test_filter_option_checks():
-    ids = lambda inline: [e.id for e in inline.check()]  # noqa: E731
-
-    assert "admin_inline_controls.E020" in ids(
-        make_inline(inline_filter_autocomplete="x")
-    )
-    assert "admin_inline_controls.E022" in ids(
-        make_inline(inline_filter_only_used_values=[1])
-    )
-    bad = make_inline(inline_filter_autocomplete=["status", "nope", "publisher"])
-    assert ids(bad).count("admin_inline_controls.E021") == 2
-    assert ids(make_inline(inline_filter_autocomplete=True)) == []
-
-
-def test_autocomplete_edge_cases(author, publishers):
-    # Other lookups of a relation keep their own field (Yes/No for isnull).
-    inline = make_inline(
-        inline_filter_fields=["publisher__isnull"], inline_filter_autocomplete=True
-    )
-    form = filter_form(inline, author)
-    assert not isinstance(form.fields["publisher__isnull"].widget, AutocompleteSelect)
-
-    # The media skip a lookup the checks report.
-    broken = make_inline(
-        inline_filter_fields=["publisher", "nope"], inline_filter_autocomplete=True
-    )
-    assert "admin/js/autocomplete.js" in str(broken.media)
+    def test_valid_autocomplete_option_has_no_errors(self):
+        assert make_inline(inline_filter_autocomplete=True).check() == []

@@ -1,5 +1,6 @@
 import re
 
+import pytest
 from demo.models import Author, Book
 from django.contrib import admin
 
@@ -23,51 +24,60 @@ def inline_js(**options):
     return scripts(inline.media)
 
 
-def test_only_the_core_script_by_default():
-    assert inline_js() == [CORE]
+class TestInlineControlsMedia:
+    """The scripts an inline loads."""
 
+    def test_only_the_core_script_by_default(self):
+        assert inline_js() == [CORE]
 
-def test_features_add_their_scripts():
-    assert inline_js(inline_save_button=True) == [CORE, SAVE]
-    assert inline_js(inline_bulk_actions=["delete_selected"]) == [CORE, ACTIONS]
-    assert inline_js(
-        inline_save_button=True, inline_bulk_actions=["delete_selected"]
-    ) == [
-        CORE,
-        SAVE,
-        ACTIONS,
-    ]
-
-
-def test_several_inlines_merge_without_duplicates():
-    media = (
-        type("A", (InlineControlsMixin, admin.TabularInline), {"model": Book})(
-            Author, admin.site
-        ).media
-        + type(
-            "B",
-            (InlineControlsMixin, admin.TabularInline),
-            {"model": Book, "inline_bulk_actions": ["delete_selected"]},
-        )(Author, admin.site).media
-        + type(
-            "C",
-            (InlineControlsMixin, admin.TabularInline),
-            {
-                "model": Book,
-                "inline_save_button": True,
-                "inline_bulk_actions": ["delete_selected"],
-            },
-        )(Author, admin.site).media
+    @pytest.mark.parametrize(
+        ("options", "expected"),
+        [
+            ({"inline_save_button": True}, [CORE, SAVE]),
+            ({"inline_bulk_actions": ["delete_selected"]}, [CORE, ACTIONS]),
+            (
+                {
+                    "inline_save_button": True,
+                    "inline_bulk_actions": ["delete_selected"],
+                },
+                [CORE, SAVE, ACTIONS],
+            ),
+        ],
+        ids=["save", "actions", "save-and-actions"],
     )
-    assert scripts(media) == [CORE, SAVE, ACTIONS]
+    def test_features_add_their_scripts(self, options, expected):
+        assert inline_js(**options) == expected
 
+    def test_several_inlines_merge_without_duplicates(self):
+        media = (
+            type("A", (InlineControlsMixin, admin.TabularInline), {"model": Book})(
+                Author, admin.site
+            ).media
+            + type(
+                "B",
+                (InlineControlsMixin, admin.TabularInline),
+                {"model": Book, "inline_bulk_actions": ["delete_selected"]},
+            )(Author, admin.site).media
+            + type(
+                "C",
+                (InlineControlsMixin, admin.TabularInline),
+                {
+                    "model": Book,
+                    "inline_save_button": True,
+                    "inline_bulk_actions": ["delete_selected"],
+                },
+            )(Author, admin.site).media
+        )
+        assert scripts(media) == [CORE, SAVE, ACTIONS]
 
-def test_the_change_form_loads_only_what_its_inlines_use(admin_client, author):
-    from django.urls import reverse
+    def test_the_change_form_loads_only_what_its_inlines_use(
+        self, admin_client, author
+    ):
+        from django.urls import reverse
 
-    html = admin_client.get(
-        reverse("test_admin:demo_author_change", args=[author.pk])
-    ).content.decode()
-    assert CORE in html
-    assert ACTIONS in html  # ThemedBookInline has actions
-    assert SAVE not in html
+        html = admin_client.get(
+            reverse("test_admin:demo_author_change", args=[author.pk])
+        ).content.decode()
+        assert CORE in html
+        assert ACTIONS in html  # ThemedBookInline has actions
+        assert SAVE not in html
