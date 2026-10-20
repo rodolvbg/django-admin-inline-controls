@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: django-admin-inline-controls 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 17:43-0500\n"
+"POT-Creation-Date: 2026-10-20 20:52+0200\n"
 "PO-Revision-Date: 2026-09-29 18:00+0200\n"
 "Last-Translator: Rodolfo Becerra\n"
 "Language-Team: Spanish\n"
@@ -197,6 +197,18 @@ msgstr "Ejecutar la acción seleccionada"
 #: templates/django_admin_inline_controls/toolbar.html
 msgid "Go"
 msgstr "Ir"
+
+#: templates/django_admin_inline_controls/toolbar.html
+msgid "Filters"
+msgstr "Filtros"
+
+#: templates/django_admin_inline_controls/toolbar.html
+#, python-format
+msgid "%(counter)s filter on"
+msgid_plural "%(counter)s filters on"
+msgstr[0] "%(counter)s filtro activo"
+msgstr[1] "%(counter)s filtros activos"
+msgstr[2] "%(counter)s filtros activos"
 
 #: templates/django_admin_inline_controls/toolbar.html
 msgid "Filter"

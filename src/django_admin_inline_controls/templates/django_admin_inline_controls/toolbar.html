@@ -40,6 +40,20 @@
 
       {% block filters %}
         {% if controls.filter_form %}
+          {% if controls.filter_sheet %}
+            {% comment %}
+              inline_filter_sheet: behind a button (always, or only when the
+              inline is narrow). A <details>: open or closed, it stays so when
+              the inline is refreshed.
+            {% endcomment %}
+            <details class="inline-controls-filter-sheet inline-controls-filter-sheet-{{ controls.filter_sheet }}">
+              {% block filter_toggle %}
+                <summary class="button inline-controls-filter-toggle{% if controls.is_filtered %} inline-controls-filter-toggle-active{% endif %}">
+                  {% translate "Filters" %}
+                  {% if controls.active_filter_count %}<span class="inline-controls-filter-count" title="{% blocktranslate count counter=controls.active_filter_count %}{{ counter }} filter on{% plural %}{{ counter }} filters on{% endblocktranslate %}">{{ controls.active_filter_count }}</span>{% endif %}
+                </summary>
+              {% endblock filter_toggle %}
+          {% endif %}
           <div class="inline-controls-filters" role="search">
             {% block filter_fields %}
               {% for field in controls.filter_form %}
@@ -65,6 +79,7 @@
               </div>
             {% endblock filter_buttons %}
           </div>
+          {% if controls.filter_sheet %}</details>{% endif %}
         {% endif %}
       {% endblock filters %}
 

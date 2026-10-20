@@ -25,6 +25,7 @@ class TestInlineChecks(ParametrizedTestCase, SimpleTestCase):
                 inline_pagination="infinite",
                 inline_ordering_fields={"title": "title"},
                 inline_filter_fields=["status", "author__name__icontains"],
+                inline_filter_sheet="narrow",
             )
             == []
         )
@@ -42,6 +43,7 @@ class TestInlineChecks(ParametrizedTestCase, SimpleTestCase):
             ({"inline_ordering_fields": "title"}, "admin_inline_controls.E006"),
             ({"inline_ordering_fields": ["-title"]}, "admin_inline_controls.E007"),
             ({"inline_ordering_fields": ["a,b"]}, "admin_inline_controls.E007"),
+            ({"inline_filter_sheet": "small"}, "admin_inline_controls.E023"),
         ],
     )
     def test_invalid_configuration(self, attrs, error_id):

@@ -91,6 +91,7 @@ shareable and several inlines never clash.
 | `inline_filter_form` | `None` | Your own filter `forms.Form`. |
 | `inline_filter_autocomplete` | `False` | Filters by a relation search as you type. `True` or a list of lookups. See [Searchable filters](#searchable-filters-and-only-the-values-in-use). |
 | `inline_filter_only_used_values` | `False` | Filters offer only the values the parent's rows have. `True` or a list of lookups. |
+| `inline_filter_sheet` | `False` | The filters behind a **Filters** button (with how many are on), like Unfold's `list_filter_sheet`: `True` always, `"narrow"` only when the inline is narrow (a phone, a side column). See [Filters behind a button](#filters-behind-a-button). |
 | `inline_controls_ajax` | `True` | Refresh the inline in place instead of reloading the page. |
 | `inline_save_button` | `False` | Show a button that saves only this inline. See [Saving only the inline](#saving-only-the-inline). |
 | `inline_bulk_actions` | `()` | Actions for the selected rows. See [Bulk actions](#bulk-actions). |
@@ -126,6 +127,26 @@ class BookInline(InlineControlsMixin, admin.TabularInline):
             queryset = queryset.filter(Q(title__icontains=search) | Q(isbn=search))
         return super().filter_inline_queryset(request, queryset, filters)
 ```
+
+#### Filters behind a button
+
+On a phone, a row of filters takes the screen before any row of the
+inline. `inline_filter_sheet` puts them behind a **Filters** button, which
+says how many are on:
+
+```python
+class BookInline(InlineControlsMixin, admin.TabularInline):
+    inline_filter_fields = ["status", "published__gte"]
+    inline_filter_sheet = "narrow"  # or True: behind the button on every screen
+```
+
+With `"narrow"`, the button only appears when the inline is narrower than
+640px (its own width, not the screen's: an inline in a side column counts
+as narrow); otherwise the filters are as without it. Open or closed, it
+stays so while filtering or paging. Browsers too old to show a closed
+`<details>`' content (before 2025) keep the button on wide inlines too.
+
+![Filters behind a button on a phone, open, with one filter on](docs/screenshots/filter-sheet.png)
 
 #### Searchable filters, and only the values in use
 
@@ -500,6 +521,7 @@ you replace a block's markup (`{{ block.super }}` keeps the original).
 | `action_selection` | The "2 of 25 selected" count and the "Select all" link. |
 | `action_status` | Where action messages appear. |
 | `filters` | The filter form. |
+| `filter_toggle` | The **Filters** button, with `inline_filter_sheet`. |
 | `filter_fields`, `filter_field` | All fields / one field (once per field, with `field`). |
 | `filter_buttons`, `filter_apply_button`, `filter_apply_label`, `filter_clear_button`, `filter_clear_label` | The **Filter** and **Clear** buttons. |
 | `ordering`, `ordering_label`, `ordering_column` | The "Sort by:" links (once per column, with `column`). |

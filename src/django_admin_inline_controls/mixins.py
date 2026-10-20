@@ -250,6 +250,10 @@ class InlineControlsMixin:
     #: or by a relation (not in autocomplete ones): ``True`` for all of them,
     #: or a list of lookups.
     inline_filter_only_used_values: bool | Sequence[str] = False
+    #: Keep the filters behind a "Filters" button (with how many are on), as
+    #: Unfold's ``list_filter_sheet``: ``True`` always, ``"narrow"`` only
+    #: when the inline is narrow (a phone, a side column), ``False`` never.
+    inline_filter_sheet: bool | str = False
     #: Refresh the inline in place (fetch) instead of reloading the page.
     inline_controls_ajax: bool = True
     #: Show a button that saves only this inline. Requires
@@ -285,6 +289,9 @@ class InlineControlsMixin:
 
     def get_inline_per_page(self, request: HttpRequest, obj: Any) -> int | None:
         return self.inline_per_page
+
+    def get_inline_filter_sheet(self, request: HttpRequest, obj: Any) -> bool | str:
+        return self.inline_filter_sheet
 
     def get_inline_ordering_fields(
         self, request: HttpRequest, obj: Any

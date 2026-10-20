@@ -63,6 +63,77 @@
     overflow: visible;
 }
 
+/* inline_filter_sheet: the filters behind a "Filters" button. */
+.inline-controls-toolbar:has(> .inline-controls-filter-sheet) {
+    container-type: inline-size;
+}
+
+.inline-controls-filter-sheet {
+    flex-basis: 100%;
+}
+
+.inline-controls-filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-sizing: border-box;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 4px;
+    font-size: 0.8125rem;
+    list-style: none;
+    cursor: pointer;
+}
+
+.inline-controls-filter-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.inline-controls-filter-toggle::after {
+    content: "▾";
+}
+
+.inline-controls-filter-sheet[open] > .inline-controls-filter-toggle::after {
+    content: "▴";
+}
+
+/* On the admin's button (its colors): the other way round. */
+.inline-controls-filter-count {
+    min-width: 1.25em;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--button-fg, #fff);
+    color: var(--button-bg, #417690);
+    font-weight: 600;
+    font-size: 0.6875rem;
+    line-height: 1.6;
+    text-align: center;
+}
+
+.inline-controls-filter-sheet > .inline-controls-filters {
+    margin-top: 8px;
+}
+
+/* "narrow": on a wide inline, the filters as without a sheet (where the
+   browser can show a closed <details>' content; elsewhere it stays a
+   button, which works too). */
+@supports selector(::details-content) {
+    @container (width >= 640px) {
+        .inline-controls-filter-sheet-narrow::details-content {
+            content-visibility: visible;
+            display: contents;
+        }
+
+        .inline-controls-filter-sheet-narrow > .inline-controls-filter-toggle {
+            display: none;
+        }
+
+        .inline-controls-filter-sheet-narrow > .inline-controls-filters {
+            margin-top: 0;
+        }
+    }
+}
+
 .inline-controls-filters {
     display: flex;
     flex-wrap: wrap;

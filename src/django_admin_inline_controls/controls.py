@@ -36,6 +36,8 @@ if TYPE_CHECKING:
 
 PAGES = "pages"
 INFINITE = "infinite"
+#: ``inline_filter_sheet``: the filters behind a button on narrow inlines only.
+NARROW = "narrow"
 
 #: Where the JS finds things in the admin's inline markup. Override per inline
 #: with ``inline_controls_selectors`` for themes or inline templates with a
@@ -156,6 +158,9 @@ class InlineControls:
         self.loaded_count: int | None = None
         self.pages_loaded = pages_loaded
         self.selectors = inline.get_inline_controls_selectors(request, parent)
+        sheet = inline.get_inline_filter_sheet(request, parent)
+        #: The filters behind a button: "always", "narrow", or None.
+        self.filter_sheet = {True: "always", NARROW: "narrow"}.get(sheet)
 
     # Query parameter names -------------------------------------------------
 
@@ -359,6 +364,11 @@ class InlineControls:
     @property
     def is_filtered(self) -> bool:
         return any(self.params.get(name) for name in self.filter_param_names)
+
+    @property
+    def active_filter_count(self) -> int:
+        """How many filters are on (on the "Filters" button of a sheet)."""
+        return sum(1 for name in self.filter_param_names if self.params.get(name))
 
     # Saving ----------------------------------------------------------------
 

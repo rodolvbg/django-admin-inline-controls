@@ -11,6 +11,7 @@ from django.core.exceptions import FieldDoesNotExist
 from django_admin_inline_controls.controls import (
     DEFAULT_SELECTORS,
     INFINITE,
+    NARROW,
     PAGES,
 )
 
@@ -107,6 +108,13 @@ def check_inline_controls(inline: InlineControlsMixin) -> list[checks.CheckMessa
                     "and values a selector or a non-empty list of selectors.",
                     "admin_inline_controls.E012",
                 )
+
+    if inline.inline_filter_sheet not in (True, False, NARROW):
+        error(
+            f"The value of '{name}.inline_filter_sheet' must be True, False or "
+            f"'{NARROW}'.",
+            "admin_inline_controls.E023",
+        )
 
     for option, error_id in (
         ("inline_filter_autocomplete", "admin_inline_controls.E020"),

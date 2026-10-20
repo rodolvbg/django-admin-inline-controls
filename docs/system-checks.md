@@ -17,6 +17,7 @@ Misconfigurations are reported by `manage.py check` (and at startup):
 | `admin_inline_controls.E020` | `inline_filter_autocomplete` is not `True`, `False` or a list of lookups. |
 | `admin_inline_controls.E021` | An `inline_filter_autocomplete` lookup isn't a relation whose model has a `ModelAdmin` with `search_fields` on the site. |
 | `admin_inline_controls.E022` | `inline_filter_only_used_values` is not `True`, `False` or a list of lookups. |
+| `admin_inline_controls.E023` | `inline_filter_sheet` is not `True`, `False` or `"narrow"`. |
 | `admin_inline_controls.E011` | `inline_controls_selectors` is not a dict. |
 | `admin_inline_controls.E012` | An `inline_controls_selectors` key is unknown, or its value is not a selector or a non-empty list of selectors. |
 | `admin_inline_controls.E101` | `inline_pagination = "infinite"` on a nested_admin inline. |

@@ -438,3 +438,38 @@ def test_selectors_adapt_to_another_markup(themed_page: Page, author):
     )
     expect(status).to_have_text("Deleted 1 book.")
     assert not Book.objects.filter(author=author, title=first_title).exists()
+
+
+def test_filter_sheet_on_a_narrow_inline(change_page: Page):
+    """inline_filter_sheet = "narrow": a button on a phone; on a wide screen,
+    the filters as they are."""
+    page = change_page
+    group = page.locator("#books-2-group")
+    toggle = group.locator(".inline-controls-filter-toggle")
+    filters = group.locator(".inline-controls-filters")
+    page.evaluate(
+        "document.querySelectorAll("
+        "'#books-2-group details:not(.inline-controls-filter-sheet)'"
+        ").forEach(d => d.open = true)"
+    )
+    expect(filters).to_be_visible()
+    expect(toggle).to_be_hidden()
+
+    page.set_viewport_size({"width": 400, "height": 800})
+    expect(toggle).to_be_visible()
+    expect(filters).to_be_hidden()
+
+    toggle.click()
+    expect(filters).to_be_visible()
+    group.locator("select[name='books-2-f-status']").select_option("published")
+    group.locator("[data-inline-controls-apply]").click()
+
+    # Refreshed in place: still open, and how many filters are on.
+    expect(group.locator(".inline-controls-filter-count")).to_have_text("1")
+    expect(group.locator(".inline-controls-filter-toggle")).to_have_class(
+        re.compile("inline-controls-filter-toggle-active")
+    )
+    expect(group.locator(".inline-controls-filters")).to_be_visible()
+    group.locator(".inline-controls-filter-toggle").click()
+    expect(group.locator(".inline-controls-filters")).to_be_hidden()
+    assert_not_reloaded(page)

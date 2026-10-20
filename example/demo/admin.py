@@ -75,6 +75,8 @@ class BookStackedInline(InlineControlsMixin, admin.StackedInline):
     inline_per_page = 3
     inline_ordering_fields = ["title", "pages"]
     inline_filter_fields = ["status"]
+    # Behind a "Filters" button when the inline is narrow (a phone).
+    inline_filter_sheet = "narrow"
     classes = ["collapse"]
 
 

@@ -101,3 +101,24 @@
     height: 28px;
     line-height: 28px;
 }
+
+/* inline_filter_sheet: Unfold's "Filters" button (its list_filter_sheet). */
+.inline-controls .button.inline-controls-filter-toggle-active {
+    border-color: var(--color-primary-600);
+    color: #fff;
+    background: var(--color-primary-600);
+}
+
+.inline-controls .button.inline-controls-filter-toggle-active:hover {
+    background: var(--color-primary-700);
+}
+
+.inline-controls .inline-controls-filter-count {
+    color: #fff;
+    background: var(--color-primary-600);
+}
+
+.inline-controls-filter-toggle-active .inline-controls-filter-count {
+    color: var(--color-primary-600);
+    background: #fff;
+}

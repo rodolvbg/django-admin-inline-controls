@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the admin's autocomplete.
 - `inline_filter_only_used_values`: filters offer only the values the
   parent's rows have.
+- `inline_filter_sheet`: the filters behind a **Filters** button that says
+  how many are on, like Unfold's `list_filter_sheet`: always, or only when
+  the inline is narrow (`"narrow"`).
 
 ### Removed
 

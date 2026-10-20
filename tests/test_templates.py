@@ -93,6 +93,7 @@ BLOCKS = {
         "action_selection",
         "action_status",
         "filters",
+        "filter_toggle",
         "filter_fields",
         "filter_field",
         "filter_buttons",
