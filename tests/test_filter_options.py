@@ -1,6 +1,5 @@
 import datetime
 
-import pytest
 from demo.models import Article, Author, Book, Publisher
 from django.contrib import admin
 from django.contrib.admin.widgets import AutocompleteSelect, AutocompleteSelectMultiple
@@ -11,26 +10,6 @@ from unittest_parametrize import ParametrizedTestCase, parametrize
 
 from django_admin_inline_controls.mixins import InlineControlsMixin
 from tests.test_inline_controls import change_url, formset
-
-
-@pytest.fixture
-def publishers(author):
-    used, other, unused = (
-        Publisher.objects.create(name=name) for name in ("Used", "Other", "Unused")
-    )
-    books = list(Book.objects.filter(author=author).order_by("pk"))
-    for book in books[:10]:
-        book.publisher = used
-    for book in books[10:12]:
-        book.publisher = other
-    Book.objects.bulk_update(books, ["publisher"])
-    # Used by another author's book only.
-    Book.objects.create(
-        author=Author.objects.create(name="Someone else"),
-        title="Elsewhere",
-        publisher=unused,
-    )
-    return used, other, unused
 
 
 def make_inline(site=admin.site, **attrs):
@@ -74,11 +53,26 @@ class TestFilterAutocomplete(TestCase):
             Article(author=cls.author, title=f"Article {n:02d}", words=n)
             for n in range(1, 21)
         )
+        cls.used, cls.other, cls.unused = (
+            Publisher.objects.create(name=name) for name in ("Used", "Other", "Unused")
+        )
+        books = list(Book.objects.filter(author=cls.author).order_by("pk"))
+        for book in books[:10]:
+            book.publisher = cls.used
+        for book in books[10:12]:
+            book.publisher = cls.other
+        Book.objects.bulk_update(books, ["publisher"])
+        # Used by another author's book only.
+        Book.objects.create(
+            author=Author.objects.create(name="Someone else"),
+            title="Elsewhere",
+            publisher=cls.unused,
+        )
 
     def setUp(self):
         self.client.force_login(self.user)
 
-    def test_relation_filters_can_autocomplete(self, publishers):
+    def test_relation_filters_can_autocomplete(self):
         inline = make_inline(
             inline_filter_fields=[
                 "publisher",
@@ -98,7 +92,7 @@ class TestFilterAutocomplete(TestCase):
             form.fields["title__icontains"].widget, AutocompleteSelect
         )
 
-    def test_autocomplete_only_listed_lookups_and_searchable_admins(self, publishers):
+    def test_autocomplete_only_listed_lookups_and_searchable_admins(self):
         listed = make_inline(
             inline_filter_fields=["publisher", "publisher__in"],
             inline_filter_autocomplete=["publisher"],
@@ -119,7 +113,7 @@ class TestFilterAutocomplete(TestCase):
             AutocompleteSelect,
         )
 
-    def test_autocomplete_filter_renders_and_loads_its_scripts(self, publishers):
+    def test_autocomplete_filter_renders_and_loads_its_scripts(self):
         html = self.client.get(change_url(self.author)).content.decode()
 
         assert 'name="books-f-publisher"' in html
@@ -129,16 +123,15 @@ class TestFilterAutocomplete(TestCase):
         # Still a filter of the inline, not a field of the change form.
         assert 'form="books-inline-controls-filters"' in html
 
-    def test_autocomplete_filter_filters(self, publishers):
-        used, other, _ = publishers
+    def test_autocomplete_filter_filters(self):
         response = self.client.get(
-            change_url(self.author, f"books-f-publisher={other.pk}")
+            change_url(self.author, f"books-f-publisher={self.other.pk}")
         )
 
         controls = formset(response, "books").inline_controls
         assert controls.filtered_queryset.count() == 2
 
-    def test_autocomplete_edge_cases(self, publishers):
+    def test_autocomplete_edge_cases(self):
         # Other lookups of a relation keep their own field (Yes/No for isnull).
         inline = make_inline(
             inline_filter_fields=["publisher__isnull"], inline_filter_autocomplete=True
@@ -180,9 +173,23 @@ class TestFilterOnlyUsedValues(TestCase):
             Article(author=cls.author, title=f"Article {n:02d}", words=n)
             for n in range(1, 21)
         )
+        cls.used, cls.other, cls.unused = (
+            Publisher.objects.create(name=name) for name in ("Used", "Other", "Unused")
+        )
+        books = list(Book.objects.filter(author=cls.author).order_by("pk"))
+        for book in books[:10]:
+            book.publisher = cls.used
+        for book in books[10:12]:
+            book.publisher = cls.other
+        Book.objects.bulk_update(books, ["publisher"])
+        # Used by another author's book only.
+        Book.objects.create(
+            author=Author.objects.create(name="Someone else"),
+            title="Elsewhere",
+            publisher=cls.unused,
+        )
 
-    def test_only_used_values(self, publishers):
-        used, other, unused = publishers
+    def test_only_used_values(self):
         Book.objects.filter(author=self.author).update(status=Book.Status.DRAFT)
         Book.objects.filter(author=self.author, title="Book 01").update(
             status=Book.Status.PUBLISHED
@@ -202,10 +209,10 @@ class TestFilterOnlyUsedValues(TestCase):
             "draft",
             "published",
         ]
-        assert set(form.fields["publisher"].queryset) == {used, other}
-        assert set(form.fields["publisher__in"].queryset) == {used, other}
+        assert set(form.fields["publisher"].queryset) == {self.used, self.other}
+        assert set(form.fields["publisher__in"].queryset) == {self.used, self.other}
 
-    def test_only_used_values_for_listed_lookups(self, publishers):
+    def test_only_used_values_for_listed_lookups(self):
         inline = make_inline(
             inline_filter_fields=["status", "publisher"],
             inline_filter_only_used_values=["publisher"],
@@ -215,8 +222,7 @@ class TestFilterOnlyUsedValues(TestCase):
         assert len(form.fields["status"].choices) == 4  # untouched
         assert form.fields["publisher"].queryset.count() == 2
 
-    def test_only_used_values_rejects_an_unused_value(self, publishers):
-        _, _, unused = publishers
+    def test_only_used_values_rejects_an_unused_value(self):
         inline = make_inline(
             inline_filter_fields=["publisher"], inline_filter_only_used_values=True
         )
@@ -224,14 +230,14 @@ class TestFilterOnlyUsedValues(TestCase):
             None,
             self.author,
             Book.objects.filter(author=self.author),
-            QueryDict(f"f-publisher={unused.pk}"),
+            QueryDict(f"f-publisher={self.unused.pk}"),
             "f",
         )
 
         assert "publisher" in form.errors
         assert queryset.count() == 25  # ignored, as any invalid filter
 
-    def test_only_used_values_skip_what_it_cannot_limit(self, publishers):
+    def test_only_used_values_skip_what_it_cannot_limit(self):
         from django import forms
 
         class CustomForm(forms.Form):

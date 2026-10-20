@@ -1,4 +1,3 @@
-import pytest
 from demo.models import Author, Book
 from django import forms
 from django.contrib import admin
@@ -45,7 +44,7 @@ class TestResolveLookup(ParametrizedTestCase, SimpleTestCase):
         assert name == lookup_name
 
     def test_resolve_lookup_unknown_field(self):
-        with pytest.raises(FieldDoesNotExist):
+        with self.assertRaises(FieldDoesNotExist):
             resolve_lookup(Book, "nope__icontains")
 
 

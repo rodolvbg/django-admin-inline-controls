@@ -1,6 +1,7 @@
 import datetime
 import importlib
 import sys
+from unittest.mock import patch
 
 import pytest
 from demo.models import Article, Author, Book
@@ -10,18 +11,13 @@ from django.test import RequestFactory, SimpleTestCase, TestCase
 from unittest_parametrize import ParametrizedTestCase, parametrize
 
 
-@pytest.fixture
-def get_request(admin_user):
-    def make(data=None):
-        request = RequestFactory().get("/", data or {})
-        request.user = admin_user
-        return request
-
-    return make
+def get_request(user, data=None):
+    request = RequestFactory().get("/", data or {})
+    request.user = user
+    return request
 
 
-@pytest.fixture
-def filterset_inline():
+def make_filterset_inline():
     django_filters = pytest.importorskip("django_filters")
     from django_admin_inline_controls.contrib.filters import (
         FilterSetInlineControlsMixin,
@@ -49,8 +45,7 @@ def filterset_inline():
     return BookInline(Author, admin.site)
 
 
-@pytest.fixture
-def unfold_mixin():
+def get_unfold_mixin():
     pytest.importorskip("unfold")
     from django_admin_inline_controls.contrib.unfold import UnfoldInlineControlsMixin
 
@@ -80,15 +75,14 @@ class TestContribImports(ParametrizedTestCase, SimpleTestCase):
         ],
     )
     def test_contrib_import_without_extra_raises_helpful_error(
-        self, monkeypatch, module, dependency, extra
+        self, module, dependency, extra
     ):
-        monkeypatch.setitem(sys.modules, dependency, None)
-        monkeypatch.delitem(sys.modules, module, raising=False)
-
-        with pytest.raises(
-            ImportError, match=rf"django-admin-inline-controls\[{extra}\]"
-        ):
-            importlib.import_module(module)
+        with patch.dict(sys.modules, {dependency: None}):
+            sys.modules.pop(module, None)
+            with self.assertRaisesRegex(
+                ImportError, rf"django-admin-inline-controls\[{extra}\]"
+            ):
+                importlib.import_module(module)
 
 
 class TestFilterSetInlineControlsMixin(TestCase):
@@ -117,9 +111,10 @@ class TestFilterSetInlineControlsMixin(TestCase):
             for n in range(1, 21)
         )
 
-    def test_filterset_filters_the_inline(self, filterset_inline, get_request):
+    def test_filterset_filters_the_inline(self):
+        filterset_inline = make_filterset_inline()
         request = get_request(
-            {"books-f-status": "published", "books-f-min_pages": "200"}
+            self.user, {"books-f-status": "published", "books-f-min_pages": "200"}
         )
         formset_class = filterset_inline.get_formset(request, self.author)
         formset = formset_class(instance=self.author, prefix="books")
@@ -132,8 +127,9 @@ class TestFilterSetInlineControlsMixin(TestCase):
             "books-inline-controls-filters"
         )
 
-    def test_filterset_receives_parent_and_request(self, filterset_inline, get_request):
-        request = get_request()
+    def test_filterset_receives_parent_and_request(self):
+        filterset_inline = make_filterset_inline()
+        request = get_request(self.user)
         captured = {}
         filterset_class = filterset_inline.inline_filterset_class
         original_init = filterset_class.__init__
@@ -142,17 +138,14 @@ class TestFilterSetInlineControlsMixin(TestCase):
             original_init(self, *args, **kwargs)
             captured.update(parent=self.parent, request=self.request)
 
-        filterset_class.__init__ = spy
-        try:
+        with patch.object(filterset_class, "__init__", spy):
             filterset_inline.get_formset(request, self.author)(
                 instance=self.author, prefix="books"
             ).get_queryset()
-        finally:
-            filterset_class.__init__ = original_init
 
         assert captured == {"parent": self.author, "request": request}
 
-    def test_filterset_mixin_without_filterset_falls_back_to_fields(self, get_request):
+    def test_filterset_mixin_without_filterset_falls_back_to_fields(self):
         pytest.importorskip("django_filters")
         from django_admin_inline_controls.contrib.filters import (
             FilterSetInlineControlsMixin,
@@ -162,7 +155,7 @@ class TestFilterSetInlineControlsMixin(TestCase):
             model = Book
             inline_filter_fields = ["status"]
 
-        request = get_request({"books-f-status": "draft"})
+        request = get_request(self.user, {"books-f-status": "draft"})
         formset = BookInline(Author, admin.site).get_formset(request, self.author)(
             instance=self.author, prefix="books"
         )
@@ -237,21 +230,23 @@ class TestUnfoldInlineControlsMixin(TestCase):
             "admin", "admin@example.com", "password"
         )
 
-    def test_unfold_selectors_under_the_inline_own(self, unfold_mixin, get_request):
+    def test_unfold_selectors_under_the_inline_own(self):
+        unfold_mixin = get_unfold_mixin()
         from django_admin_inline_controls.contrib.unfold import UNFOLD_SELECTORS
         from django_admin_inline_controls.controls import DEFAULT_SELECTORS
 
         inline = unfold_inline(
             unfold_mixin, inline_controls_selectors={"row_label": ".mine"}
         )
-        selectors = inline.get_inline_controls_selectors(get_request(), None)
+        selectors = inline.get_inline_controls_selectors(get_request(self.user), None)
 
         assert selectors["form_rows"] == UNFOLD_SELECTORS["form_rows"]
         assert selectors["saved_row"] == [".original"]
         assert selectors["row_label"] == [".mine"]
         assert selectors["heading"] == DEFAULT_SELECTORS["heading"]
 
-    def test_unfold_media(self, unfold_mixin):
+    def test_unfold_media(self):
+        unfold_mixin = get_unfold_mixin()
         media = str(
             unfold_inline(unfold_mixin, inline_bulk_actions=["delete_selected"]).media
         )
@@ -261,7 +256,8 @@ class TestUnfoldInlineControlsMixin(TestCase):
         assert "css/core.css" in media
         assert "css/contrib/unfold.css" in media
 
-    def test_unfold_per_page_is_an_error(self, unfold_mixin):
+    def test_unfold_per_page_is_an_error(self):
+        unfold_mixin = get_unfold_mixin()
         ids = lambda inline: [error.id for error in inline.check()]  # noqa: E731
 
         assert "admin_inline_controls.E104" in ids(

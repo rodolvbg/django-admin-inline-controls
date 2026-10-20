@@ -204,7 +204,7 @@ class TestSaveInlinePermissions(ParametrizedTestCase, TestCase):
 
         assert client.post(save_url(self.author), {}).status_code == 403
 
-    def test_delete_only_permission_skips_view_only_rows(self, staff_client):
+    def test_delete_only_permission_skips_view_only_rows(self):
         client = staff_client(self.client, "change_author", "view_book", "delete_book")
         rows = list(Book.objects.filter(author=self.author).order_by("pk")[:10])
         data = {

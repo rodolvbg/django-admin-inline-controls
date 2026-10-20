@@ -1,12 +1,12 @@
 import datetime
 import re
 
+import pytest
 from demo.models import Article, Author, Book
 from django.contrib.auth.models import User
 from django.template.loader import get_template
-from django.test import SimpleTestCase, TestCase
+from django.test import TestCase
 from django.urls import reverse
-from unittest_parametrize import ParametrizedTestCase, parametrize
 
 
 def custom_inline_html(admin_client, author):
@@ -49,7 +49,7 @@ class TestTemplateOverrides(TestCase):
         head, html = custom_inline_html(self.client, self.author)
 
         assert 'class="inline-controls my-inline"' in head
-        assert '<p class="my-intro">Books by this self.author</p>' in head
+        assert '<p class="my-intro">Books by this author</p>' in head
         assert ">Search</button>" in head
         assert '<a class="my-help" href="/help/">Help</a>' in head
         assert head.count('<div class="my-filter">') == 1
@@ -130,10 +130,10 @@ BLOCKS = {
 }
 
 
-class TestTemplateBlocks(ParametrizedTestCase, SimpleTestCase):
+@pytest.mark.parametrize(("name", "expected"), BLOCKS.items())
+class TestTemplateBlocks:
     """The documented template blocks."""
 
-    @parametrize(("name", "expected"), BLOCKS.items())
     def test_every_documented_block_exists(self, name, expected):
         source = get_template(name).template.source
 

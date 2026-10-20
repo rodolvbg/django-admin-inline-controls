@@ -12,14 +12,10 @@ from unittest_parametrize import ParametrizedTestCase, parametrize
 from django_admin_inline_controls.mixins import InlineControlsMixin
 
 
-@pytest.fixture
-def get_request(admin_user):
-    def make(data=None, method="get"):
-        request = getattr(RequestFactory(), method)("/", data or {})
-        request.user = admin_user
-        return request
-
-    return make
+def get_request(user, data=None, method="get"):
+    request = getattr(RequestFactory(), method)("/", data or {})
+    request.user = user
+    return request
 
 
 def make_inline(**attrs):
@@ -63,9 +59,9 @@ class TestOrderBy(ParametrizedTestCase, TestCase):
             for n in range(1, 21)
         )
 
-    def test_explicit_pk_ordering_is_not_duplicated(self, get_request):
+    def test_explicit_pk_ordering_is_not_duplicated(self):
         inline = make_inline(inline_per_page=5, inline_default_ordering=["-pk"])
-        formset = build_formset(inline, get_request(), self.author)
+        formset = build_formset(inline, get_request(self.user), self.author)
 
         order_by = formset.inline_controls._order_by(Book.objects.all())
 
@@ -80,18 +76,20 @@ class TestOrderBy(ParametrizedTestCase, TestCase):
             (["pages"], ["title", "pages", "pk"]),
         ],
     )
-    def test_pk_tie_breaker(self, get_request, default_ordering, expected):
+    def test_pk_tie_breaker(self, default_ordering, expected):
         inline = make_inline(
             inline_ordering_fields=["title"], inline_default_ordering=default_ordering
         )
-        formset = build_formset(inline, get_request({"books-o": "title"}), self.author)
+        formset = build_formset(
+            inline, get_request(self.user, {"books-o": "title"}), self.author
+        )
 
         assert formset.inline_controls._order_by(Book.objects.all()) == expected
 
-    def test_ordering_column_without_field_uses_its_name(self, get_request):
+    def test_ordering_column_without_field_uses_its_name(self):
         inline = make_inline(inline_ordering_fields={"custom": "pages"})
         formset = build_formset(
-            inline, get_request({"books-o": "-custom"}), self.author
+            inline, get_request(self.user, {"books-o": "-custom"}), self.author
         )
         formset.get_queryset()
 
@@ -126,9 +124,9 @@ class TestInlineFormset(TestCase):
             for n in range(1, 21)
         )
 
-    def test_unpaginated_inline_has_no_page_links(self, get_request):
+    def test_unpaginated_inline_has_no_page_links(self):
         inline = make_inline(inline_ordering_fields=["pages"])
-        formset = build_formset(inline, get_request(), self.author)
+        formset = build_formset(inline, get_request(self.user), self.author)
         formset.get_queryset()
         controls = formset.inline_controls
 
@@ -138,7 +136,7 @@ class TestInlineFormset(TestCase):
         assert controls.total_count is None
         assert len(formset.get_queryset()) == 25
 
-    def test_bound_formset_skips_missing_primary_keys(self, get_request):
+    def test_bound_formset_skips_missing_primary_keys(self):
         book = Book.objects.get(title="Book 03")
         data = {
             "books-TOTAL_FORMS": "2",
@@ -148,16 +146,18 @@ class TestInlineFormset(TestCase):
         }
         inline = make_inline(inline_per_page=5)
         formset = build_formset(
-            inline, get_request(data, "post"), self.author, data=data
+            inline, get_request(self.user, data, "post"), self.author, data=data
         )
 
         assert list(formset.get_queryset()) == [book]
 
-    def test_multi_valued_filter_lookup_is_distinct(self, get_request):
-        # Every book of the self.author matches through each of its sibling books,
+    def test_multi_valued_filter_lookup_is_distinct(self):
+        # Every book of the author matches through each of its sibling books,
         # which would repeat rows without distinct().
         inline = make_inline(inline_filter_fields=["author__books__title__icontains"])
-        request = get_request({"books-f-author__books__title__icontains": "book"})
+        request = get_request(
+            self.user, {"books-f-author__books__title__icontains": "book"}
+        )
         formset = build_formset(inline, request, self.author)
 
         assert formset.get_queryset().count() == 25
@@ -189,7 +189,7 @@ class TestContribEdgeCases(TestCase):
             for n in range(1, 21)
         )
 
-    def test_filterset_kwargs_default_to_empty(self, get_request):
+    def test_filterset_kwargs_default_to_empty(self):
         django_filters = pytest.importorskip("django_filters")
         from django_admin_inline_controls.contrib.filters import (
             FilterSetInlineControlsMixin,
@@ -206,7 +206,7 @@ class TestContribEdgeCases(TestCase):
 
         inline = BookInline(Author, admin.site)
         formset = build_formset(
-            inline, get_request({"books-f-status": "draft"}), self.author
+            inline, get_request(self.user, {"books-f-status": "draft"}), self.author
         )
 
         assert inline.get_inline_filterset_kwargs(None, self.author) == {}

@@ -1,5 +1,6 @@
 import datetime
 import json
+from unittest.mock import patch
 
 import pytest
 from demo.models import Article, Author, Book
@@ -268,7 +269,7 @@ class TestDeleteSelected(TestCase):
 
         assert b"Deleted 1 book." in response.content
 
-    def test_delete_selected_reports_protected_objects(self, rf, monkeypatch):
+    def test_delete_selected_reports_protected_objects(self):
         from django.db.models import ProtectedError
 
         book = Book.objects.get(title="Book 01")
@@ -276,22 +277,22 @@ class TestDeleteSelected(TestCase):
         def protected(self, *args, **kwargs):
             raise ProtectedError("protected", {book})
 
-        monkeypatch.setattr(Book, "delete", protected)
         sent = []
         inline = type(
             "Inline",
             (),
             {"message_user": lambda s, r, m, level: sent.append((m, level))},
         )()
-        delete_selected(
-            inline, RequestFactory().post("/"), Book.objects.filter(pk=book.pk)
-        )
+        with patch.object(Book, "delete", protected):
+            delete_selected(
+                inline, RequestFactory().post("/"), Book.objects.filter(pk=book.pk)
+            )
 
         assert sent[0][1] == messages.ERROR
         assert "Book 01" in str(sent[0][0])
         assert Book.objects.filter(pk=book.pk).exists()
 
-    def test_delete_selected_without_parent_skips_history(self, rf):
+    def test_delete_selected_without_parent_skips_history(self):
         sent = []
         inline = type(
             "Inline",
@@ -336,7 +337,7 @@ class TestActionPermissions(TestCase):
             for n in range(1, 21)
         )
 
-    def test_actions_are_filtered_by_permission(self, staff_client):
+    def test_actions_are_filtered_by_permission(self):
         client = staff_client(self.client, "view_author", "view_book", "change_book")
         data = config(client.get(change_url(self.author)))
 
@@ -350,12 +351,12 @@ class TestActionPermissions(TestCase):
         assert response.status_code == 400
         assert Book.objects.filter(title="Book 01").exists()
 
-    def test_parent_view_permission_required(self, staff_client):
+    def test_parent_view_permission_required(self):
         client = staff_client(self.client, "change_book", "delete_book")
 
         assert run(client, self.author, "mark_published", ["1"]).status_code == 403
 
-    def test_actions_without_the_endpoint_are_hidden(self, rf):
+    def test_actions_without_the_endpoint_are_hidden(self):
         site = admin.AdminSite(name="no_actions_site")
 
         class BookInline(InlineControlsMixin, admin.TabularInline):
@@ -382,7 +383,7 @@ class TestInlineActions(TestCase):
             "admin", "admin@example.com", "password"
         )
 
-    def test_action_resolution_and_descriptions(self, rf):
+    def test_action_resolution_and_descriptions(self):
         inline = CallableActionInline(Author, admin.site)
         inline.inline_bulk_actions = ["plain", standalone, decorated, "delete_selected"]
         request = RequestFactory().get("/")
@@ -411,7 +412,7 @@ class TestInlineActions(TestCase):
         assert full.confirmation == "Sure %(count)s?"
         assert full.allowed_permissions == ["change"]
 
-    def test_message_user(self, rf):
+    def test_message_user(self):
         from django.contrib.messages.storage.fallback import FallbackStorage
 
         request = RequestFactory().get("/")

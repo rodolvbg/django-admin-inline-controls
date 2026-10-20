@@ -9,13 +9,13 @@ from typing import Any
 import pytest
 from demo.models import Article, Author, Book
 from django.contrib.auth.models import User
-from django.test import SimpleTestCase, TestCase
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import translation
-from unittest_parametrize import ParametrizedTestCase, parametrize
 
 LOCALE_DIR = Path(__file__).parent.parent / "src/django_admin_inline_controls/locale"
 CATALOGS = sorted(LOCALE_DIR.glob("*/LC_MESSAGES/django.po"))
+CATALOG_IDS = [c.parent.parent.name for c in CATALOGS]
 
 
 def po_entries(path):
@@ -68,18 +68,10 @@ def mo_messages(path):
     return {key: value for key, value in catalog.items() if key != ""}
 
 
-@pytest.fixture
-def spanish_page(admin_client, author):
-    url = reverse("admin:demo_author_change", args=[author.pk])
-    with translation.override("es"):
-        response = admin_client.get(url)
-    return response
-
-
-class TestCatalogs(ParametrizedTestCase, SimpleTestCase):
+@pytest.mark.parametrize("catalog", CATALOGS, ids=CATALOG_IDS)
+class TestCatalogs:
     """The shipped message catalogs."""
 
-    @parametrize("catalog", CATALOGS, ids=lambda c: c.parent.parent.name)
     def test_every_message_is_translated(self, catalog):
         problems = [
             msgid
@@ -88,7 +80,6 @@ class TestCatalogs(ParametrizedTestCase, SimpleTestCase):
         ]
         assert problems == []
 
-    @parametrize("catalog", CATALOGS, ids=lambda c: c.parent.parent.name)
     def test_compiled_catalog_is_up_to_date(self, catalog):
         """The shipped .mo has exactly the .po's translations (not compared by
         date: a git checkout gives both files arbitrary modification times)."""
@@ -126,9 +117,12 @@ class TestSpanishRendering(TestCase):
 
     def setUp(self):
         self.client.force_login(self.user)
+        url = reverse("admin:demo_author_change", args=[self.author.pk])
+        with translation.override("es"):
+            self.spanish_page = self.client.get(url)
 
-    def test_toolbar_and_footer_in_spanish(self, spanish_page):
-        html = spanish_page.content.decode()
+    def test_toolbar_and_footer_in_spanish(self):
+        html = self.spanish_page.content.decode()
 
         # Identical to Django admin messages: the admin's translation wins (it is
         # listed first in INSTALLED_APPS), consistent with the changelist.
@@ -139,16 +133,16 @@ class TestSpanishRendering(TestCase):
         assert "Guardar books" in html  # the model's own verbose name is untouched
         assert "Mostrando 15 de 20" in html
 
-    def test_generated_filter_labels_and_choices_in_spanish(self, spanish_page):
-        html = spanish_page.content.decode()
+    def test_generated_filter_labels_and_choices_in_spanish(self):
+        html = self.spanish_page.content.decode()
 
         assert "Title (contiene)" in html
         assert "Published (desde)" in html
         assert '<option value="true">Sí</option>' in html
 
-    def test_actions_and_js_messages_in_spanish(self, spanish_page):
-        html = spanish_page.content.decode()
-        controls = spanish_page.context["inline_admin_formsets"][
+    def test_actions_and_js_messages_in_spanish(self):
+        html = self.spanish_page.content.decode()
+        controls = self.spanish_page.context["inline_admin_formsets"][
             0
         ].formset.inline_controls
         with translation.override("es"):  # config_json is computed lazily
