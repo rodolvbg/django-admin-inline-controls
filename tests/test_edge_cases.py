@@ -1,9 +1,13 @@
 """Branches the request-level tests don't reach on their own."""
 
+import datetime
+
 import pytest
-from demo.models import Author, Book
+from demo.models import Article, Author, Book
 from django.contrib import admin
-from django.test import RequestFactory
+from django.contrib.auth.models import User
+from django.test import RequestFactory, TestCase
+from unittest_parametrize import ParametrizedTestCase, parametrize
 
 from django_admin_inline_controls.mixins import InlineControlsMixin
 
@@ -33,19 +37,42 @@ def build_formset(inline, request, author, **kwargs):
     )
 
 
-class TestOrderBy:
+class TestOrderBy(ParametrizedTestCase, TestCase):
     """Ordering of the inline queryset."""
 
-    def test_explicit_pk_ordering_is_not_duplicated(self, get_request, author):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+
+    def test_explicit_pk_ordering_is_not_duplicated(self, get_request):
         inline = make_inline(inline_per_page=5, inline_default_ordering=["-pk"])
-        formset = build_formset(inline, get_request(), author)
+        formset = build_formset(inline, get_request(), self.author)
 
         order_by = formset.inline_controls._order_by(Book.objects.all())
 
         assert order_by == ["-pk"]
         assert formset.get_queryset()[0].title == "Book 25"
 
-    @pytest.mark.parametrize(
+    @parametrize(
         ("default_ordering", "expected"),
         [
             ((), ["title", "pk"]),
@@ -53,17 +80,19 @@ class TestOrderBy:
             (["pages"], ["title", "pages", "pk"]),
         ],
     )
-    def test_pk_tie_breaker(self, get_request, author, default_ordering, expected):
+    def test_pk_tie_breaker(self, get_request, default_ordering, expected):
         inline = make_inline(
             inline_ordering_fields=["title"], inline_default_ordering=default_ordering
         )
-        formset = build_formset(inline, get_request({"books-o": "title"}), author)
+        formset = build_formset(inline, get_request({"books-o": "title"}), self.author)
 
         assert formset.inline_controls._order_by(Book.objects.all()) == expected
 
-    def test_ordering_column_without_field_uses_its_name(self, get_request, author):
+    def test_ordering_column_without_field_uses_its_name(self, get_request):
         inline = make_inline(inline_ordering_fields={"custom": "pages"})
-        formset = build_formset(inline, get_request({"books-o": "-custom"}), author)
+        formset = build_formset(
+            inline, get_request({"books-o": "-custom"}), self.author
+        )
         formset.get_queryset()
 
         (column,) = formset.inline_controls.ordering_columns
@@ -71,12 +100,35 @@ class TestOrderBy:
         assert column.direction == "descending"
 
 
-class TestInlineFormset:
+class TestInlineFormset(TestCase):
     """Querysets and links of the inline formset."""
 
-    def test_unpaginated_inline_has_no_page_links(self, get_request, author):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+
+    def test_unpaginated_inline_has_no_page_links(self, get_request):
         inline = make_inline(inline_ordering_fields=["pages"])
-        formset = build_formset(inline, get_request(), author)
+        formset = build_formset(inline, get_request(), self.author)
         formset.get_queryset()
         controls = formset.inline_controls
 
@@ -86,7 +138,7 @@ class TestInlineFormset:
         assert controls.total_count is None
         assert len(formset.get_queryset()) == 25
 
-    def test_bound_formset_skips_missing_primary_keys(self, get_request, author):
+    def test_bound_formset_skips_missing_primary_keys(self, get_request):
         book = Book.objects.get(title="Book 03")
         data = {
             "books-TOTAL_FORMS": "2",
@@ -95,24 +147,49 @@ class TestInlineFormset:
             "books-1-id": str(book.pk),
         }
         inline = make_inline(inline_per_page=5)
-        formset = build_formset(inline, get_request(data, "post"), author, data=data)
+        formset = build_formset(
+            inline, get_request(data, "post"), self.author, data=data
+        )
 
         assert list(formset.get_queryset()) == [book]
 
-    def test_multi_valued_filter_lookup_is_distinct(self, get_request, author):
-        # Every book of the author matches through each of its sibling books,
+    def test_multi_valued_filter_lookup_is_distinct(self, get_request):
+        # Every book of the self.author matches through each of its sibling books,
         # which would repeat rows without distinct().
         inline = make_inline(inline_filter_fields=["author__books__title__icontains"])
         request = get_request({"books-f-author__books__title__icontains": "book"})
-        formset = build_formset(inline, request, author)
+        formset = build_formset(inline, request, self.author)
 
         assert formset.get_queryset().count() == 25
 
 
-class TestContribEdgeCases:
+class TestContribEdgeCases(TestCase):
     """Contrib mixins' remaining branches."""
 
-    def test_filterset_kwargs_default_to_empty(self, get_request, author):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+
+    def test_filterset_kwargs_default_to_empty(self, get_request):
         django_filters = pytest.importorskip("django_filters")
         from django_admin_inline_controls.contrib.filters import (
             FilterSetInlineControlsMixin,
@@ -129,10 +206,10 @@ class TestContribEdgeCases:
 
         inline = BookInline(Author, admin.site)
         formset = build_formset(
-            inline, get_request({"books-f-status": "draft"}), author
+            inline, get_request({"books-f-status": "draft"}), self.author
         )
 
-        assert inline.get_inline_filterset_kwargs(None, author) == {}
+        assert inline.get_inline_filterset_kwargs(None, self.author) == {}
         assert formset.get_queryset().count() == 12
 
     def test_nested_mixin_pages_mode_passes_checks(self):

@@ -47,6 +47,7 @@ optional-dependencies.dev = [
   "ruff>=0.6",
   "tox>=4",
   "tox-uv>=1",
+  "unittest-parametrize>=1.9",
 ]
 optional-dependencies.filters = [ "django-filter>=23.2" ]
 optional-dependencies.nested = [ "django-nested-admin>=4.1" ]
@@ -71,6 +72,7 @@ dev = [
   "ruff>=0.6",
   "tox>=4",
   "tox-uv>=1",
+  "unittest-parametrize>=1.9.0",
 ]
 
 [tool.hatch]
@@ -160,6 +162,7 @@ env_run_base.deps = [
   "pytest",
   "pytest-django",
   "pytest-cov",
+  "unittest-parametrize",
   { replace = "if", condition = "factor.dj42", then = [ "django>=4.2,<4.3" ], extend = true },
   { replace = "if", condition = "factor.dj50", then = [ "django>=5.0,<5.1" ], extend = true },
   { replace = "if", condition = "factor.dj51", then = [ "django>=5.1,<5.2" ], extend = true },

@@ -1,8 +1,11 @@
+import datetime
 import json
 
-import pytest
-from demo.models import Article, Book
+from demo.models import Article, Author, Book
+from django.contrib.auth.models import User
+from django.test import TestCase
 from django.urls import reverse
+from unittest_parametrize import ParametrizedTestCase, parametrize
 
 CHANGE_URL = "admin:demo_author_change"
 
@@ -72,11 +75,37 @@ def post_data(author, books=(), articles=()):
     return data
 
 
-class TestPagination:
+class TestPagination(ParametrizedTestCase, TestCase):
     """Paginating an inline."""
 
-    def test_first_page_has_per_page_rows(self, admin_client, author):
-        response = admin_client.get(change_url(author))
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_first_page_has_per_page_rows(self):
+        response = self.client.get(change_url(self.author))
 
         assert response.status_code == 200
         assert titles(response) == [f"Book {n:02d}" for n in range(1, 11)]
@@ -85,44 +114,42 @@ class TestPagination:
         assert [link.number for link in controls.page_links] == [1, 2, 3]
         assert controls.page_links[0].current
 
-    def test_page_param_selects_page(self, admin_client, author):
-        response = admin_client.get(change_url(author, "books-page=3"))
+    def test_page_param_selects_page(self):
+        response = self.client.get(change_url(self.author, "books-page=3"))
 
         assert titles(response) == [f"Book {n:02d}" for n in range(21, 26)]
 
-    @pytest.mark.parametrize(
-        ("page", "expected"), [("abc", "Book 01"), ("99", "Book 21")]
-    )
-    def test_invalid_or_out_of_range_page(self, admin_client, author, page, expected):
-        response = admin_client.get(change_url(author, f"books-page={page}"))
+    @parametrize(("page", "expected"), [("abc", "Book 01"), ("99", "Book 21")])
+    def test_invalid_or_out_of_range_page(self, page, expected):
+        response = self.client.get(change_url(self.author, f"books-page={page}"))
 
         assert titles(response)[0] == expected
 
-    def test_page_links_keep_other_params(self, admin_client, author):
-        response = admin_client.get(
-            change_url(author, "books-o=-pages&articles-page=2")
+    def test_page_links_keep_other_params(self):
+        response = self.client.get(
+            change_url(self.author, "books-o=-pages&articles-page=2")
         )
         link = formset(response, "books").inline_controls.page_links[1]
 
         assert link.url == "?books-o=-pages&articles-page=2&books-page=2"
 
-    def test_inlines_on_the_same_page_are_independent(self, admin_client, author):
-        response = admin_client.get(change_url(author, "books-page=2"))
+    def test_inlines_on_the_same_page_are_independent(self):
+        response = self.client.get(change_url(self.author, "books-page=2"))
 
         # "books-2" is the stacked inline of the same model: its own page 1.
         assert titles(response, "books")[0] == "Book 11"
         assert titles(response, "books-2")[0] == "Book 01"
 
-    def test_add_view_renders_without_controls(self, admin_client, db):
-        response = admin_client.get(reverse("admin:demo_author_add"))
+    def test_add_view_renders_without_controls(self):
+        response = self.client.get(reverse("admin:demo_author_add"))
 
         assert response.status_code == 200
         assert formset(response, "books").inline_controls is None
         assert b"data-inline-controls" not in response.content
 
-    def test_plain_inline_renders_like_a_normal_inline(self, admin_client, author):
-        url = reverse("test_admin:demo_author_change", args=[author.pk])
-        response = admin_client.get(url)
+    def test_plain_inline_renders_like_a_normal_inline(self):
+        url = reverse("test_admin:demo_author_change", args=[self.author.pk])
+        response = self.client.get(url)
         plain = formset(response, "books-2")
 
         assert len(plain.initial_forms) == 25
@@ -134,32 +161,60 @@ class TestPagination:
         assert "inline-controls-footer" not in plain_html
 
 
-class TestOrdering:
+class TestOrdering(TestCase):
     """Ordering an inline by its columns."""
 
-    def test_ordering_descending(self, admin_client, author):
-        response = admin_client.get(change_url(author, "books-o=-pages"))
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_ordering_descending(self):
+        response = self.client.get(change_url(self.author, "books-o=-pages"))
 
         assert pages(response)[:3] == [250, 240, 230]
 
-    def test_ordering_by_expression(self, admin_client, author):
+    def test_ordering_by_expression(self):
         Book.objects.filter(title="Book 25").update(title="aaa")
-        response = admin_client.get(change_url(author, "books-o=title"))
+        response = self.client.get(change_url(self.author, "books-o=title"))
 
         # Lower("title") sorts "aaa" before "Book ..." despite the case.
         assert titles(response)[0] == "aaa"
 
-    def test_undeclared_ordering_is_ignored(self, admin_client, author):
-        response = admin_client.get(
-            change_url(author, "books-o=author__name,-featured,-pages")
+    def test_undeclared_ordering_is_ignored(self):
+        response = self.client.get(
+            change_url(self.author, "books-o=author__name,-featured,-pages")
         )
 
         controls = formset(response, "books").inline_controls
         assert controls.ordering == [("pages", True)]
         assert pages(response)[0] == 250
 
-    def test_ordering_columns_urls(self, admin_client, author):
-        response = admin_client.get(change_url(author, "books-o=-pages&books-page=2"))
+    def test_ordering_columns_urls(self):
+        response = self.client.get(
+            change_url(self.author, "books-o=-pages&books-page=2")
+        )
         columns = {
             c.name: c
             for c in formset(response, "books").inline_controls.ordering_columns
@@ -175,10 +230,36 @@ class TestOrdering:
         assert columns["title"].label == "Title"
 
 
-class TestFilters:
+class TestFilters(ParametrizedTestCase, TestCase):
     """Filtering an inline."""
 
-    @pytest.mark.parametrize(
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    @parametrize(
         ("query", "expected_count"),
         [
             ("books-f-status=published", 13),
@@ -189,22 +270,22 @@ class TestFilters:
             ("books-f-status=published&books-f-featured=true", 3),
         ],
     )
-    def test_filters(self, admin_client, author, query, expected_count):
-        response = admin_client.get(change_url(author, query))
+    def test_filters(self, query, expected_count):
+        response = self.client.get(change_url(self.author, query))
 
         assert formset(response, "books").inline_controls.total_count == expected_count
 
-    def test_invalid_filter_value_is_ignored_and_reported(self, admin_client, author):
-        response = admin_client.get(change_url(author, "books-f-published__gte=nope"))
+    def test_invalid_filter_value_is_ignored_and_reported(self):
+        response = self.client.get(
+            change_url(self.author, "books-f-published__gte=nope")
+        )
         controls = formset(response, "books").inline_controls
 
         assert controls.total_count == 25
         assert "published__gte" in controls.filter_form.errors
 
-    def test_filter_widgets_are_detached_from_the_change_form(
-        self, admin_client, author
-    ):
-        response = admin_client.get(change_url(author))
+    def test_filter_widgets_are_detached_from_the_change_form(self):
+        response = self.client.get(change_url(self.author))
 
         assert b'form="books-inline-controls-filters"' in response.content
         assert config(response)["filterParams"] == [
@@ -215,80 +296,135 @@ class TestFilters:
             "books-f-published__gte",
         ]
 
-    def test_filtering_resets_pagination_in_links(self, admin_client, author):
-        response = admin_client.get(change_url(author, "books-f-status=draft"))
+    def test_filtering_resets_pagination_in_links(self):
+        response = self.client.get(change_url(self.author, "books-f-status=draft"))
 
         assert formset(response, "books").inline_controls.is_filtered
         assert b"data-inline-controls-clear" in response.content
 
-    def test_custom_filter_form(self, admin_client, author):
-        url = reverse("test_admin:demo_author_change", args=[author.pk])
-        response = admin_client.get(f"{url}?books-f-q=book 2&books-f-status=published")
+    def test_custom_filter_form(self):
+        url = reverse("test_admin:demo_author_change", args=[self.author.pk])
+        response = self.client.get(f"{url}?books-f-q=book 2&books-f-status=published")
 
         assert titles(response) == ["Book 21", "Book 23", "Book 25"]
 
 
-class TestSavingRows:
+class TestSavingRows(TestCase):
     """Saving the change form with paginated rows."""
 
-    def test_save_rows_of_a_later_page(self, admin_client, author):
-        page_two = list(Book.objects.filter(author=author).order_by("pk")[10:20])
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+        cls.other_author = Author.objects.create(name="Other")
+        Book.objects.create(author=cls.other_author, title="Other book", pages=1)
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_save_rows_of_a_later_page(self):
+        page_two = list(Book.objects.filter(author=self.author).order_by("pk")[10:20])
         page_two[3].title = "Edited"
-        response = admin_client.post(
-            change_url(author, "books-page=2"), post_data(author, books=page_two)
+        response = self.client.post(
+            change_url(self.author, "books-page=2"),
+            post_data(self.author, books=page_two),
         )
 
         assert response.status_code == 302
         assert Book.objects.get(pk=page_two[3].pk).title == "Edited"
-        assert Book.objects.filter(author=author).count() == 25
+        assert Book.objects.filter(author=self.author).count() == 25
 
-    def test_save_rows_loaded_across_pages(self, admin_client, author):
+    def test_save_rows_loaded_across_pages(self):
         # Infinite scroll: 20 articles from two "pages" submitted together.
-        articles = list(Article.objects.filter(author=author).order_by("pk"))
+        articles = list(Article.objects.filter(author=self.author).order_by("pk"))
         articles[17].title = "Loaded later"
-        response = admin_client.post(
-            change_url(author), post_data(author, articles=articles)
+        response = self.client.post(
+            change_url(self.author), post_data(self.author, articles=articles)
         )
 
         assert response.status_code == 302
         assert Article.objects.get(pk=articles[17].pk).title == "Loaded later"
 
-    def test_save_ignores_rows_of_another_parent(
-        self, admin_client, author, other_author
-    ):
-        foreign = Book.objects.get(author=other_author)
+    def test_save_ignores_rows_of_another_parent(self):
+        foreign = Book.objects.get(author=self.other_author)
         foreign.title = "Hijacked"
-        admin_client.post(change_url(author), post_data(author, books=[foreign]))
+        self.client.post(
+            change_url(self.author), post_data(self.author, books=[foreign])
+        )
 
         foreign.refresh_from_db()
         assert foreign.title == "Other book"
-        assert foreign.author == other_author
+        assert foreign.author == self.other_author
 
-    def test_invalid_submitted_pk_is_ignored(self, admin_client, author):
-        data = post_data(author, books=list(Book.objects.filter(author=author)[:1]))
+    def test_invalid_submitted_pk_is_ignored(self):
+        data = post_data(
+            self.author, books=list(Book.objects.filter(author=self.author)[:1])
+        )
         data["books-0-id"] = "not-a-number"
-        response = admin_client.post(change_url(author), data)
+        response = self.client.post(change_url(self.author), data)
 
         assert response.status_code == 200  # re-rendered with a form error
 
-    def test_infinite_mode_after_validation_error_continues_after_loaded_rows(
-        self, admin_client, author
-    ):
-        articles = list(Article.objects.filter(author=author).order_by("pk")[:15])
-        data = post_data(author, articles=articles)
+    def test_infinite_mode_after_validation_error_continues_after_loaded_rows(self):
+        articles = list(Article.objects.filter(author=self.author).order_by("pk")[:15])
+        data = post_data(self.author, articles=articles)
         data["articles-0-words"] = "-1"  # invalid PositiveIntegerField
-        response = admin_client.post(change_url(author), data)
+        response = self.client.post(change_url(self.author), data)
 
         assert response.status_code == 200
         assert config(response, "articles")["loadedCount"] == 15
         assert config(response, "articles")["nextUrl"] == "?articles-page=2"
 
 
-class TestInfiniteMode:
+class TestInfiniteMode(TestCase):
     """Infinite pagination."""
 
-    def test_infinite_mode_config(self, admin_client, author):
-        response = admin_client.get(change_url(author))
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_infinite_mode_config(self):
+        response = self.client.get(change_url(self.author))
         data = config(response, "articles")
 
         assert data["mode"] == "infinite"
@@ -297,8 +433,8 @@ class TestInfiniteMode:
         assert data["nextUrl"] == "?articles-page=2"
         assert b"data-inline-controls-more" in response.content
 
-    def test_infinite_mode_last_page_has_no_next(self, admin_client, author):
-        response = admin_client.get(change_url(author, "articles-page=2"))
+    def test_infinite_mode_last_page_has_no_next(self):
+        response = self.client.get(change_url(self.author, "articles-page=2"))
 
         assert config(response, "articles")["nextUrl"] is None
         assert len(formset(response, "articles").initial_forms) == 5

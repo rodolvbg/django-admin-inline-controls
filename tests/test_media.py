@@ -1,8 +1,11 @@
+import datetime
 import re
 
-import pytest
-from demo.models import Author, Book
+from demo.models import Article, Author, Book
 from django.contrib import admin
+from django.contrib.auth.models import User
+from django.test import TestCase
+from unittest_parametrize import ParametrizedTestCase, parametrize
 
 from django_admin_inline_controls.mixins import InlineControlsMixin
 
@@ -24,13 +27,39 @@ def inline_js(**options):
     return scripts(inline.media)
 
 
-class TestInlineControlsMedia:
+class TestInlineControlsMedia(ParametrizedTestCase, TestCase):
     """The scripts an inline loads."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
 
     def test_only_the_core_script_by_default(self):
         assert inline_js() == [CORE]
 
-    @pytest.mark.parametrize(
+    @parametrize(
         ("options", "expected"),
         [
             ({"inline_save_button": True}, [CORE, SAVE]),
@@ -43,7 +72,7 @@ class TestInlineControlsMedia:
                 [CORE, SAVE, ACTIONS],
             ),
         ],
-        ids=["save", "actions", "save-and-actions"],
+        ids=["save", "actions", "save_and_actions"],
     )
     def test_features_add_their_scripts(self, options, expected):
         assert inline_js(**options) == expected
@@ -70,13 +99,11 @@ class TestInlineControlsMedia:
         )
         assert scripts(media) == [CORE, SAVE, ACTIONS]
 
-    def test_the_change_form_loads_only_what_its_inlines_use(
-        self, admin_client, author
-    ):
+    def test_the_change_form_loads_only_what_its_inlines_use(self):
         from django.urls import reverse
 
-        html = admin_client.get(
-            reverse("test_admin:demo_author_change", args=[author.pk])
+        html = self.client.get(
+            reverse("test_admin:demo_author_change", args=[self.author.pk])
         ).content.decode()
         assert CORE in html
         assert ACTIONS in html  # ThemedBookInline has actions

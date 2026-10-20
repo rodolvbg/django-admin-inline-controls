@@ -6,6 +6,8 @@ from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 from django.db.models import F
 from django.db.models.functions import Lower
+from django.test import SimpleTestCase
+from unittest_parametrize import ParametrizedTestCase, parametrize
 
 from django_admin_inline_controls.controls import (
     normalize_ordering_fields,
@@ -22,10 +24,10 @@ def book_field(name):
     return Book._meta.get_field(name)
 
 
-class TestResolveLookup:
+class TestResolveLookup(ParametrizedTestCase, SimpleTestCase):
     """Resolving a filter lookup to its model field."""
 
-    @pytest.mark.parametrize(
+    @parametrize(
         ("lookup", "field_name", "lookup_name"),
         [
             ("title", "title", None),
@@ -47,10 +49,10 @@ class TestResolveLookup:
             resolve_lookup(Book, "nope__icontains")
 
 
-class TestBuildFilterFormfield:
+class TestBuildFilterFormfield(ParametrizedTestCase, SimpleTestCase):
     """Building the form field of a filter."""
 
-    @pytest.mark.parametrize(
+    @parametrize(
         ("db_field", "lookup_name", "expected"),
         [
             (book_field("title"), None, forms.CharField),
@@ -89,10 +91,10 @@ class TestBuildFilterFormfield:
         assert formfield.clean("false") is False
 
 
-class TestOrderingExpression:
+class TestOrderingExpression(ParametrizedTestCase, SimpleTestCase):
     """Turning ordering values into query expressions."""
 
-    @pytest.mark.parametrize(
+    @parametrize(
         ("value", "descending", "expected"),
         [
             ("title", False, "title"),
@@ -117,10 +119,10 @@ class TestOrderingExpression:
         assert not asc.descending  # the declared expression is not mutated
 
 
-class TestNormalizeOrderingFields:
+class TestNormalizeOrderingFields(ParametrizedTestCase, SimpleTestCase):
     """Normalizing the ordering fields option."""
 
-    @pytest.mark.parametrize(
+    @parametrize(
         ("value", "expected"),
         [
             (["a", "b"], {"a": "a", "b": "b"}),
@@ -132,7 +134,7 @@ class TestNormalizeOrderingFields:
         assert normalize_ordering_fields(value) == expected
 
 
-class TestInlineFilterFormClass:
+class TestInlineFilterFormClass(SimpleTestCase):
     """The generated filter form of an inline."""
 
     def test_generated_filter_labels(self):
@@ -150,7 +152,7 @@ class TestInlineFilterFormClass:
         ]
 
 
-class TestTypes:
+class TestTypes(SimpleTestCase):
     """The public type aliases."""
 
     def test_type_aliases_are_importable(self):

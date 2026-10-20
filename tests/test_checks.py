@@ -1,6 +1,7 @@
-import pytest
 from demo.models import Author, Book
 from django.contrib import admin
+from django.test import SimpleTestCase
+from unittest_parametrize import ParametrizedTestCase, parametrize
 
 from django_admin_inline_controls.mixins import InlineControlsMixin
 
@@ -14,7 +15,7 @@ def check_ids(**attrs):
     return [error.id for error in inline_class(Author, admin.site).check()]
 
 
-class TestInlineChecks:
+class TestInlineChecks(ParametrizedTestCase, SimpleTestCase):
     """System checks of the inline options."""
 
     def test_valid_configuration_has_no_errors(self):
@@ -28,7 +29,7 @@ class TestInlineChecks:
             == []
         )
 
-    @pytest.mark.parametrize(
+    @parametrize(
         ("attrs", "error_id"),
         [
             ({"inline_pagination": "nope"}, "admin_inline_controls.E001"),

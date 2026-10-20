@@ -1,9 +1,12 @@
+import datetime
 import json
 
-import pytest
-from demo.models import Author, Book
+from demo.models import Article, Author, Book
 from django.contrib import admin
+from django.contrib.auth.models import User
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
+from unittest_parametrize import ParametrizedTestCase, parametrize
 
 from django_admin_inline_controls.controls import DEFAULT_SELECTORS
 from django_admin_inline_controls.mixins import InlineControlsMixin
@@ -17,12 +20,38 @@ def make_inline(**attrs):
     )(Author, admin.site)
 
 
-class TestSelectors:
+class TestSelectors(TestCase):
     """The DOM selectors sent to the JS."""
 
-    def test_defaults_are_sent_to_the_js(self, admin_client, author):
-        response = admin_client.get(
-            reverse("admin:demo_author_change", args=[author.pk])
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_defaults_are_sent_to_the_js(self):
+        response = self.client.get(
+            reverse("admin:demo_author_change", args=[self.author.pk])
         )
         controls = response.context["inline_admin_formsets"][0].formset.inline_controls
 
@@ -43,9 +72,9 @@ class TestSelectors:
         # The defaults themselves are never modified.
         assert DEFAULT_SELECTORS["container"] == [".inline-group fieldset"]
 
-    def test_themed_inline_uses_its_selectors(self, admin_client, author):
-        url = reverse("test_admin:demo_author_change", args=[author.pk])
-        response = admin_client.get(url)
+    def test_themed_inline_uses_its_selectors(self):
+        url = reverse("test_admin:demo_author_change", args=[self.author.pk])
+        response = self.client.get(url)
         themed = next(
             f.formset
             for f in response.context["inline_admin_formsets"]
@@ -57,10 +86,10 @@ class TestSelectors:
         assert selectors["footer_parent"] == DEFAULT_SELECTORS["footer_parent"]
 
 
-class TestSelectorChecks:
+class TestSelectorChecks(ParametrizedTestCase, SimpleTestCase):
     """System checks of the selectors option."""
 
-    @pytest.mark.parametrize(
+    @parametrize(
         ("selectors", "error_id"),
         [
             ("container", "admin_inline_controls.E011"),

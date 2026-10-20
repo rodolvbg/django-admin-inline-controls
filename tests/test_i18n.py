@@ -1,4 +1,5 @@
 import ast
+import datetime
 import gettext
 import json
 import re
@@ -6,8 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from demo.models import Article, Author, Book
+from django.contrib.auth.models import User
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import translation
+from unittest_parametrize import ParametrizedTestCase, parametrize
 
 LOCALE_DIR = Path(__file__).parent.parent / "src/django_admin_inline_controls/locale"
 CATALOGS = sorted(LOCALE_DIR.glob("*/LC_MESSAGES/django.po"))
@@ -71,10 +76,10 @@ def spanish_page(admin_client, author):
     return response
 
 
-class TestCatalogs:
+class TestCatalogs(ParametrizedTestCase, SimpleTestCase):
     """The shipped message catalogs."""
 
-    @pytest.mark.parametrize("catalog", CATALOGS, ids=lambda c: c.parent.parent.name)
+    @parametrize("catalog", CATALOGS, ids=lambda c: c.parent.parent.name)
     def test_every_message_is_translated(self, catalog):
         problems = [
             msgid
@@ -83,7 +88,7 @@ class TestCatalogs:
         ]
         assert problems == []
 
-    @pytest.mark.parametrize("catalog", CATALOGS, ids=lambda c: c.parent.parent.name)
+    @parametrize("catalog", CATALOGS, ids=lambda c: c.parent.parent.name)
     def test_compiled_catalog_is_up_to_date(self, catalog):
         """The shipped .mo has exactly the .po's translations (not compared by
         date: a git checkout gives both files arbitrary modification times)."""
@@ -93,8 +98,34 @@ class TestCatalogs:
         assert mo_messages(compiled) == po_messages(catalog)
 
 
-class TestSpanishRendering:
+class TestSpanishRendering(TestCase):
     """Rendering in Spanish."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
 
     def test_toolbar_and_footer_in_spanish(self, spanish_page):
         html = spanish_page.content.decode()
@@ -129,16 +160,16 @@ class TestSpanishRendering:
             "¿Eliminar %(count)s books seleccionados? No se puede deshacer."
         )
 
-    def test_delete_selected_message_is_pluralized(self, admin_client, author):
+    def test_delete_selected_message_is_pluralized(self):
         url = reverse(
-            "admin:demo_author_inline_controls_action", args=[author.pk, "books"]
+            "admin:demo_author_inline_controls_action", args=[self.author.pk, "books"]
         )
-        pks = list(author.books.order_by("pk").values_list("pk", flat=True)[:2])
+        pks = list(self.author.books.order_by("pk").values_list("pk", flat=True)[:2])
         with translation.override("es"):
-            one = admin_client.post(
+            one = self.client.post(
                 url, {"action": "delete_selected", "_selected_action": pks[:1]}
             )
-            two = admin_client.post(
+            two = self.client.post(
                 url, {"action": "delete_selected", "_selected_action": pks[1:]}
             )
 

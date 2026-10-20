@@ -1,8 +1,12 @@
+import datetime
 import re
 
-import pytest
+from demo.models import Article, Author, Book
+from django.contrib.auth.models import User
 from django.template.loader import get_template
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
+from unittest_parametrize import ParametrizedTestCase, parametrize
 
 
 def custom_inline_html(admin_client, author):
@@ -12,14 +16,40 @@ def custom_inline_html(admin_client, author):
     return html[html.rindex("<div", 0, start) : html.index('id="books-3-group"')], html
 
 
-class TestTemplateOverrides:
+class TestTemplateOverrides(TestCase):
     """Overriding template blocks per inline."""
 
-    def test_blocks_can_be_overridden_per_inline(self, admin_client, author):
-        head, html = custom_inline_html(admin_client, author)
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_blocks_can_be_overridden_per_inline(self):
+        head, html = custom_inline_html(self.client, self.author)
 
         assert 'class="inline-controls my-inline"' in head
-        assert '<p class="my-intro">Books by this author</p>' in head
+        assert '<p class="my-intro">Books by this self.author</p>' in head
         assert ">Search</button>" in head
         assert '<a class="my-help" href="/help/">Help</a>' in head
         assert head.count('<div class="my-filter">') == 1
@@ -28,8 +58,8 @@ class TestTemplateOverrides:
         assert "25 books</span>" in html
         assert len(re.findall(r'<i class="my-page">\s*<', html)) == 5  # 1 2 3 4 5
 
-    def test_other_inlines_keep_the_default_templates(self, admin_client, author):
-        _, html = custom_inline_html(admin_client, author)
+    def test_other_inlines_keep_the_default_templates(self):
+        _, html = custom_inline_html(self.client, self.author)
 
         assert html.count(">Search</button>") == 1
         assert html.count('class="my-intro"') == 1
@@ -100,10 +130,10 @@ BLOCKS = {
 }
 
 
-class TestTemplateBlocks:
+class TestTemplateBlocks(ParametrizedTestCase, SimpleTestCase):
     """The documented template blocks."""
 
-    @pytest.mark.parametrize(("name", "expected"), BLOCKS.items())
+    @parametrize(("name", "expected"), BLOCKS.items())
     def test_every_documented_block_exists(self, name, expected):
         source = get_template(name).template.source
 
