@@ -100,6 +100,22 @@ Only columns declared in `inline_ordering_fields` can be sorted: ordering
 by an arbitrary field from the URL would let anyone infer the values of
 fields the inline never shows.
 
+Each feature is a mixin of its own, in `django_admin_inline_controls.features`,
+with its options, its methods and the script it adds only when it's on:
+
+| Mixin | Options |
+|---|---|
+| `InlinePaginationMixin` | `inline_per_page`, `inline_pagination` |
+| `InlineOrderingMixin` | `inline_ordering_fields`, `inline_default_ordering` |
+| `InlineFiltersMixin` | `inline_filter_*` |
+| `InlineSaveMixin` (and `InlineSaveAdminMixin` on the parent) | `inline_save_button` |
+| `InlineBulkActionsMixin` (and `InlineBulkActionsAdminMixin` on the parent) | `inline_bulk_actions` |
+| `InlineControlsBaseMixin` | `inline_controls_ajax`, `inline_controls_selectors`, the templates |
+
+`InlineControlsMixin` and `InlineControlsAdminMixin` are their sum: use
+them, and look in (or override the methods of) each feature's mixin. They
+share one toolbar and footer, so they're not meant to be used one by one.
+
 ### Custom filters
 
 Generated fields depend on the model field and lookup (choices → select,

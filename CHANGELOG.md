@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   how many are on, like Unfold's `list_filter_sheet`: always, or only when
   the inline is narrow (`"narrow"`).
 
+### Changed
+
+- `InlineControlsMixin` and `InlineControlsAdminMixin` are now the sum of
+  one mixin per feature (`django_admin_inline_controls.features`:
+  pagination, ordering, filters, saving the inline, bulk actions), each
+  with its options, its methods and its script. Nothing changes for the
+  inlines: same options, same behaviour, same imports.
+
 ### Removed
 
 - Footer rows (`inline_footer_rows`, `inline_footer_scope`,
