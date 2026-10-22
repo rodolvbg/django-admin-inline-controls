@@ -10,7 +10,7 @@ from django.urls import reverse
 from unittest_parametrize import ParametrizedTestCase, parametrize
 
 from django_admin_inline_controls.mixins import InlineControlsMixin
-from tests.test_inline_controls import change_url, config, formset, post_data
+from tests.helpers import change_url, config, formset, post_data
 
 
 def save_url(author, prefix="books", query=""):

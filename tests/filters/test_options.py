@@ -9,7 +9,7 @@ from django.test import SimpleTestCase, TestCase
 from unittest_parametrize import ParametrizedTestCase, parametrize
 
 from django_admin_inline_controls.mixins import InlineControlsMixin
-from tests.test_inline_controls import change_url, formset
+from tests.helpers import change_url, formset
 
 
 def make_inline(site=admin.site, **attrs):

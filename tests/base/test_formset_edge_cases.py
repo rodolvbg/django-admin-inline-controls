@@ -1,0 +1,96 @@
+"""InlineControlsBaseMixin: the formset's edge cases."""
+
+import datetime
+
+from demo.models import Article, Author, Book
+from django.contrib import admin
+from django.contrib.auth.models import User
+from django.test import RequestFactory, TestCase
+
+from django_admin_inline_controls.mixins import InlineControlsMixin
+
+
+def get_request(user, data=None, method="get"):
+    request = getattr(RequestFactory(), method)("/", data or {})
+    request.user = user
+    return request
+
+
+def make_inline(**attrs):
+    inline_class = type(
+        "BookInline",
+        (InlineControlsMixin, admin.TabularInline),
+        {"model": Book, "__module__": __name__, **attrs},
+    )
+    return inline_class(Author, admin.site)
+
+
+def build_formset(inline, request, author, **kwargs):
+    return inline.get_formset(request, author)(
+        instance=author, prefix="books", **kwargs
+    )
+
+
+class TestInlineFormset(TestCase):
+    """Querysets and links of the inline formset."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        cls.author = Author.objects.create(name="Author")
+        statuses = [Book.Status.DRAFT, Book.Status.PUBLISHED]
+        Book.objects.bulk_create(
+            Book(
+                author=cls.author,
+                title=f"Book {n:02d}",
+                status=statuses[n % 2],
+                published=datetime.date(2020, 1, 1) + datetime.timedelta(days=n),
+                pages=10 * n,
+                featured=n % 5 == 0,
+            )
+            for n in range(1, 26)
+        )
+        Article.objects.bulk_create(
+            Article(author=cls.author, title=f"Article {n:02d}", words=n)
+            for n in range(1, 21)
+        )
+
+    def test_unpaginated_inline_has_no_page_links(self):
+        inline = make_inline(inline_ordering_fields=["pages"])
+        formset = build_formset(inline, get_request(self.user), self.author)
+        formset.get_queryset()
+        controls = formset.inline_controls
+
+        assert controls.page_links == []
+        assert controls.next_page_url is None
+        assert controls.is_paginated is False
+        assert controls.total_count is None
+        assert len(formset.get_queryset()) == 25
+
+    def test_bound_formset_skips_missing_primary_keys(self):
+        book = Book.objects.get(title="Book 03")
+        data = {
+            "books-TOTAL_FORMS": "2",
+            "books-INITIAL_FORMS": "2",
+            "books-0-id": "",
+            "books-1-id": str(book.pk),
+        }
+        inline = make_inline(inline_per_page=5)
+        formset = build_formset(
+            inline, get_request(self.user, data, "post"), self.author, data=data
+        )
+
+        assert list(formset.get_queryset()) == [book]
+
+    def test_multi_valued_filter_lookup_is_distinct(self):
+        # Every book of the author matches through each of its sibling books,
+        # which would repeat rows without distinct().
+        inline = make_inline(inline_filter_fields=["author__books__title__icontains"])
+        request = get_request(
+            self.user, {"books-f-author__books__title__icontains": "book"}
+        )
+        formset = build_formset(inline, request, self.author)
+
+        assert formset.get_queryset().count() == 25

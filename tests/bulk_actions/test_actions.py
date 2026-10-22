@@ -14,7 +14,7 @@ from unittest_parametrize import ParametrizedTestCase, parametrize
 
 from django_admin_inline_controls.actions import delete_selected, inline_action
 from django_admin_inline_controls.mixins import InlineControlsMixin
-from tests.test_inline_controls import change_url, config, formset
+from tests.helpers import change_url, config, formset
 
 
 def action_url(author, prefix="books", query=""):
