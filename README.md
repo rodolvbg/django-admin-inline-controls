@@ -100,8 +100,9 @@ Only columns declared in `inline_ordering_fields` can be sorted: ordering
 by an arbitrary field from the URL would let anyone infer the values of
 fields the inline never shows.
 
-Each feature is a mixin of its own, in `django_admin_inline_controls.features`,
-with its options, its methods and the script it adds only when it's on:
+Internally, each feature lives in a mixin of its own, in
+`django_admin_inline_controls.features`, with its options, its methods and
+the script it adds only when it's on:
 
 | Mixin | Options |
 |---|---|
@@ -113,8 +114,11 @@ with its options, its methods and the script it adds only when it's on:
 | `InlineControlsBaseMixin` | `inline_controls_ajax`, `inline_controls_selectors`, the templates |
 
 `InlineControlsMixin` and `InlineControlsAdminMixin` are their sum: use
-them, and look in (or override the methods of) each feature's mixin. They
-share one toolbar and footer, so they're not meant to be used one by one.
+them, and look in (or override the methods of) each feature's mixin. The
+split is only how the code is organized: the features share one toolbar and
+footer, and the system checks read every option, so a feature's mixin does
+not work on its own (an inline with just `InlinePaginationMixin` fails
+`manage.py check`). Don't mix them in one by one.
 
 ### Custom filters
 

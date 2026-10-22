@@ -52,8 +52,9 @@ class InlineControlsMixin(
             inline_ordering_fields = ["title", "published"]
             inline_filter_fields = ["status", "title__icontains"]
 
-    Each feature is a mixin of its own, with its options and its script
-    (added to ``media`` only when it's on): ``InlinePaginationMixin``
+    Internally each feature is a mixin of its own, with its options and its
+    script (added to ``media`` only when it's on; they don't work on their own,
+    use this class): ``InlinePaginationMixin``
     (``inline_per_page``, ``inline_pagination``), ``InlineOrderingMixin``
     (``inline_ordering_fields``, ``inline_default_ordering``),
     ``InlineFiltersMixin`` (``inline_filter_*``), ``InlineSaveMixin``
