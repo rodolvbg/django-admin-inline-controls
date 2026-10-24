@@ -4,7 +4,7 @@ requires = [ "hatch-fancy-pypi-readme", "hatchling" ]
 
 [project]
 name = "django-admin-inline-controls"
-version = "0.1.1"
+version = "0.1.2"
 description = "Pagination, filtering and ordering for Django admin inlines."
 keywords = [ "admin", "django", "filter", "inline", "ordering", "pagination" ]
 license = "MIT"
